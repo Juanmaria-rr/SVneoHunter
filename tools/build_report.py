@@ -118,7 +118,8 @@ def build(run_dir: str) -> str:
     private = counts.get("events_private", "NA")
     hc = counts.get("events_hc", "NA")
     rna_n = counts.get("events_rna_supported", "NA")
-    both = counts.get("events_hc_and_rna", "NA")
+    hc_and_rna = counts.get("events_hc_and_rna", "NA")
+    all_three = counts.get("events_private_hc_and_rna", "NA")
 
     W(section("Result"))
     W(f"Of {fmt(counts.get('vcf_records'))} structural-variant records, "
@@ -126,8 +127,12 @@ def build(run_dir: str) -> str:
       f"candidate peptides are identical to a catalogue entry, collapsing to "
       f"**{fmt(events_n)} credible genomic events**. Of those, {fmt(private)} are "
       f"private to this sample, {fmt(hc)} are high-confidence SV calls, "
-      f"{fmt(rna_n)} carry junction-crossing reads in RNA, and "
-      f"**{fmt(both)} satisfy both**.\n")
+      f"{fmt(rna_n)} carry junction-crossing reads in RNA, "
+      f"{fmt(hc_and_rna)} are high-confidence *and* transcribed, and "
+      f"**{fmt(all_three)} satisfy all three**.\n\n"
+      f"The last two figures are different questions and must not be conflated: "
+      f"a confidently called, transcribed junction that is common in the "
+      f"population is a polymorphism, not a recurrent tumour neoantigen.\n")
 
     null = summary.get("null_model", {})
     if null.get("p_value") is not None:

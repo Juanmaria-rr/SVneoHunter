@@ -52,8 +52,12 @@ def run_sample(sample, branch, cfg, reference, proteome, pool,
     # -- stage 1: admission ------------------------------------------------
     breakends = vcf.read_breakends(sample.vcf)
     counts["vcf_records"] = len(breakends)
+    # The panel threshold only applies where the panel is an INFO field this
+    # pipeline thresholds itself. On a somatic set the caller already decided,
+    # and `admit_panel_filtered` is the only lever that can reopen it.
     pon_max = branch.pon_max if sample.vcf_kind == "germline" else None
-    admitted, funnel1 = vcf.admit(breakends, sample.vcf_kind, pon_max)
+    admitted, funnel1 = vcf.admit(breakends, sample.vcf_kind, pon_max,
+                                  admit_panel_filtered=branch.admit_panel_filtered)
     counts["admitted"] = len(admitted)
     junctions = vcf.pair_junctions(admitted)
     counts["junctions"] = len(junctions)
@@ -135,11 +139,13 @@ def run_sample(sample, branch, cfg, reference, proteome, pool,
         events = confidence.annotate_confidence(events)
         af = confidence.annotate_gnomad(events, cfg.resources.get("gnomad_sv", ""),
                                         cfg.resources.get("gnomad_helper"))
-        events = confidence.annotate_privacy(events, panel_size, af)
+        events = confidence.annotate_privacy(events, panel_size, af,
+                                             pon_in_privacy=branch.pon_in_privacy)
         counts["events_hc"] = int(events["sv_hc"].sum())
         counts["events_private"] = int(events["is_private"].sum())
+        basis = "PON+population" if branch.pon_in_privacy else "population only"
         print(f"  stage6: {counts['events_hc']} HC, "
-              f"{counts['events_private']} private (PON+population)")
+              f"{counts['events_private']} private ({basis})")
 
     # -- stage 7: expression -----------------------------------------------
     if not events.empty and sample.has_expression:
@@ -170,7 +176,8 @@ def run_sample(sample, branch, cfg, reference, proteome, pool,
         every = confidence.annotate_confidence(every)
         af_all = confidence.annotate_gnomad(every, cfg.resources.get("gnomad_sv", ""),
                                             cfg.resources.get("gnomad_helper"))
-        every = confidence.annotate_privacy(every, panel_size, af_all)
+        every = confidence.annotate_privacy(every, panel_size, af_all,
+                                            pon_in_privacy=branch.pon_in_privacy)
         if sample.has_expression:
             expr_all, _ = rna.expression(every, anno, sample.isofox_dir,
                                          sample.isofox_prefix)
@@ -197,10 +204,19 @@ def run_sample(sample, branch, cfg, reference, proteome, pool,
                                   on="sample_sv_id", how="left")
             counts["events_hc_and_rna"] = int(
                 (merged["sv_hc"] & merged["rna_tier"].isin(["STRONG", "SUGGESTIVE"])).sum())
+            # Privacy is NOT in the count above, and a report that says "satisfies
+            # every criterion" over it overstates the result: measured on
+            # RPE1-WT_noPON, `events_hc_and_rna` was 1 (ITGA11) while the event
+            # is in 90% of one gnomAD population. The all-criteria count is
+            # therefore computed and reported separately.
+            counts["events_private_hc_and_rna"] = int(
+                (merged["is_private"] & merged["sv_hc"]
+                 & merged["rna_tier"].isin(["STRONG", "SUGGESTIVE"])).sum())
             print(f"  stage8: tiers {evidence['rna_tier'].value_counts().to_dict()}")
         else:
             counts["events_rna_supported"] = "NA"
             counts["events_hc_and_rna"] = "NA"
+            counts["events_private_hc_and_rna"] = "NA"
         _write(events, os.path.join(out_dir, "credible_events.tsv"))
 
     # -- null model ---------------------------------------------------------

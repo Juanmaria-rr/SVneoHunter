@@ -51,8 +51,21 @@ resources:
 # the panel filter; it applies to germline/parental VCFs only, because somatic
 # call sets arrive already panel-filtered by the caller.
 branches:
+  # The panel filter reaches a candidate at TWO points — stage-1 admission and
+  # the `is_private` verdict at stage 6 — so a branch that means "report the
+  # panel, do not filter on it" has to relax both. Relaxing only `pon_max` is a
+  # no-op on somatic call sets, where the caller already wrote its panel verdict
+  # into FILTER: measured here, 82 / 58 / 96 records carry FILTER=PON and
+  # `pon_max` never sees any of them.
+  #
+  # INFERRED breakends stay excluded in both branches. That is not a panel
+  # judgement — they have no read support, hence no junction sequence to
+  # translate — so admitting them would make the branches differ in a second,
+  # unrelated respect and break attribution.
   - name: noPON
-    pon_max: null
+    pon_max: null               # this pipeline's own PON_COUNT threshold: off
+    admit_panel_filtered: true  # also admit somatic FILTER=PON records
+    pon_in_privacy: false       # PON_COUNT reported, but is_private = gnomAD only
   - name: PON10
     pon_max: 10
 

@@ -49,21 +49,34 @@ sample they are 387 and 288.
 
 ### All four lines
 
-Derived lines use only their somatic call set, so the panel branch does not apply
-to them; the parental line is shown on both branches.
+Every line is shown on both branches. `PON10` enforces the panel of normals;
+`noPON` reports it without filtering on it — see `criteria.SOMATIC_KEEP_FILTERS_REPORT_PON`
+for why that needs two levers rather than one threshold.
 
-| | RPE1-WT (PON10) | RPE1-WT (unfiltered) | RPE1-TP53 | RPE1-TP53-BRCA1 | RPE1-TP53-BRCA2 |
-|---|---|---|---|---|---|
-| SV records | 17,953 | 17,953 | 350 | 303 | 234 |
-| Admitted | 2,286 | 14,340 | 102 | 172 | 114 |
-| Junctions | 1,143 | 7,170 | 51 | 86 | 57 |
-| Candidate peptides | 20,721 | 63,036 | 64 | 536 | 54 |
-| **Distinct matches** | **64** | **288** | **0** | **21** | **0** |
-| Credible | 57 | 331 | 0 | 21 | 0 |
-| **Events** | **13** | **46** | **0** | **1** | **0** |
-| Private | 9 | 9 | — | 0 | — |
-| High-confidence | 4 | 15 | — | 0 | — |
-| RNA-supported | 1 | 3 | — | 0 | — |
+| | WT<br>PON10 | WT<br>noPON | TP53<br>PON10 | TP53<br>noPON | BRCA1<br>PON10 | BRCA1<br>noPON | BRCA2<br>PON10 | BRCA2<br>noPON |
+|---|---|---|---|---|---|---|---|---|
+| SV records | 17,953 | 17,953 | 350 | 350 | 303 | 303 | 234 | 234 |
+| Caller `FILTER=PON` admitted | — | — | — | 82 | — | 58 | — | 96 |
+| Admitted | 2,286 | 14,340 | 102 | 176 | 172 | 226 | 114 | 200 |
+| Junctions | 1,143 | 7,170 | 51 | 88 | 86 | 113 | 57 | 100 |
+| Candidate peptides | 20,710 | 63,036 | 64 | 78 | 536 | 572 | 54 | 148 |
+| **Distinct matches** | **64** | **288** | **0** | **0** | **21** | **21** | **0** | **0** |
+| **Events** | **13** | **46** | **0** | **0** | **1** | **1** | **0** | **0** |
+| Private | 9 | 24 | — | — | 0 | 0 | — | — |
+| High-confidence | 4 | 15 | — | — | 0 | 0 | — | — |
+| RNA-supported | 1 | 3 | — | — | 0 | 0 | — | — |
+| **Private + HC + RNA** | **0** | **0** | — | — | **0** | **0** | — | — |
+
+Read `Private` against its branch: on `noPON` the panel count does not vote, so
+privacy there rests on population frequency alone. That is why WT's private count
+rises from 9 to 24 while the branch is *less* selective, not more — a different
+question is being answered, not the same one more loosely.
+
+**Relaxing the panel adds junctions to the derived lines and no matches.** The
+82, 58 and 96 caller-rejected records admitted on `noPON` raise the junction
+count by 73%, 31% and 75%, and the distinct-match count by nothing at all: 0, 21
+and 0, identical to the filtered branch. Whatever limits recurrence detection in
+the derived lines, it is not the panel filter.
 
 Two observations the per-line numbers make plain:
 
@@ -105,11 +118,11 @@ validate functionally. What matters is knowing which gate removed what.
 | Operation | Function | Criteria |
 |---|---|---|
 | Parse every VCF record, extract evidence fields and inserted sequence | `read_breakends()` L75 | — |
-| Apply FILTER / pairing / panel filters | `admit()` L107 | `SOMATIC_KEEP_FILTERS` L34, `PON_MAX` L42, `PON_ABSENT_MEANS` L46 |
-| Type-aware lesion size | `event_size()` L138 | — |
-| Collapse mated breakends to junctions | `pair_junctions()` L157 | — |
-| Write the admitted set for stage 2 | `write_admitted_vcf()` L228 | — |
-| Estimate panel size, so `PON_COUNT` can be read as a fraction | `panel_size_estimate()` L269 | `criteria.pon_fraction()` |
+| Apply FILTER / pairing / panel filters | `admit()` L107 | `SOMATIC_KEEP_FILTERS` L34, `PON_MAX` L69, `PON_ABSENT_MEANS` L73 |
+| Type-aware lesion size | `event_size()` L151 | — |
+| Collapse mated breakends to junctions | `pair_junctions()` L170 | — |
+| Write the admitted set for stage 2 | `write_admitted_vcf()` L241 | — |
+| Estimate panel size, so `PON_COUNT` can be read as a fraction | `panel_size_estimate()` L282 | `criteria.pon_fraction()` |
 
 The breakend span is **not** the lesion size: a deletion removes `span − 1`
 bases, an insertion always spans 1 while inserting many. `event_size()` encodes
@@ -126,10 +139,10 @@ peptides from panel and copy-number-inferred breakends.
 |---|---|---|
 | Backend selection | `generators/__init__.py` `get_generator()` | config `peptide_generator:` |
 | Contract every backend must satisfy | `generators/base.py` `validate_output()` | — |
-| NeoSV run, stopping before MHC | `generators/neosv.py` `NeoSVGenerator.generate()` | `PEPTIDE_LENGTHS` L93, `RUN_MHC_PREDICTION` L99 |
+| NeoSV run, stopping before MHC | `generators/neosv.py` `NeoSVGenerator.generate()` | `PEPTIDE_LENGTHS` L120, `RUN_MHC_PREDICTION` L126 |
 | SV identifiers recovered from the VCF | `_neosv_extensions.build_sv_id_map()` L40 | — |
 | Junction offset in the fusion protein | `_neosv_extensions.junction_indices()` L81 | — |
-| Candidate table written before any MHC step | `_neosv_extensions.write_all_neopeptides()` L130 | `PEPTIDE_COLUMN` L103 |
+| Candidate table written before any MHC step | `_neosv_extensions.write_all_neopeptides()` L130 | `PEPTIDE_COLUMN` L130 |
 
 Peptide sequences come from NeoSV (MIT, vendored at `vendor/neosv/`) with **one
 patch**: `vendor/patches/001-pyensembl-stop-codon-frame`. Without it, with
@@ -154,7 +167,7 @@ matches.
 | Level 3: breakpoint proximity gradient | `level3_proximity()` L164 | `PROXIMITY_WINDOWS_KB` |
 | Low-complexity and self-proteome tests | `sequence_qc()` L290 | `LC_*` L108–111 |
 | The credible rule | `criteria.is_credible()` | — |
-| Collapse peptides to genomic events | `to_events()` L312 | `EVENT_DEDUP_COLUMN` L198, `REPORT_BOTH_EVENT_GRAINS` L205 |
+| Collapse peptides to genomic events | `to_events()` L312 | `EVENT_DEDUP_COLUMN` L225, `REPORT_BOTH_EVENT_GRAINS` L232 |
 
 Gene concordance is evaluated against **both** breakends: a junction joins two
 genes and the catalogue peptide may be annotated to either. Testing only the
@@ -168,9 +181,9 @@ different gene is excluded by construction.
 
 | Operation | Function | Criteria |
 |---|---|---|
-| High-confidence verdict per event | `annotate_confidence()` L40 → `criteria.event_is_hc()` | `HC_MIN_SEGMAPQ` L213, `HC_MIN_VF` L214, `HC_MIN_QUAL` L215, `HC_MIN_SV_SIZE` L216 |
-| Panel + population verdict | `annotate_privacy()` L61 → `criteria.is_private()` | `PON_MAX` L42, `GNOMAD_MAX_AF` L52 |
-| Population frequency by reciprocal overlap | `annotate_gnomad()` L109, `_overlap_join()` L133 | `GNOMAD_RECIPROCAL_OVERLAP` L56 |
+| High-confidence verdict per event | `annotate_confidence()` L40 → `criteria.event_is_hc()` | `HC_MIN_SEGMAPQ` L240, `HC_MIN_VF` L241, `HC_MIN_QUAL` L242, `HC_MIN_SV_SIZE` L243 |
+| Panel + population verdict | `annotate_privacy()` L61 → `criteria.is_private()` | `PON_MAX` L69, `GNOMAD_MAX_AF` L79 |
+| Population frequency by reciprocal overlap | `annotate_gnomad()` L129, `_overlap_join()` L153 | `GNOMAD_RECIPROCAL_OVERLAP` L83 |
 
 Two orthogonal questions kept apart. **Confidence** asks whether the call is
 real; **privacy** asks whether it is the sample's own. An event can be perfect
@@ -185,11 +198,11 @@ that is unreliable for clonal samples.
 
 | Operation | Function | Criteria |
 |---|---|---|
-| Gene and disrupted-isoform TPM, with background gradient | `expression()` L39 | `TPM_GRADIENT` L302, `TPM_EXPRESSED` L307, `EXPRESSION_USES_BOTH_BREAKENDS` L311 |
-| Choose the only valid test for the geometry | `select_test()` L217 | `MIN_TESTABLE_GAP_SIZE` L333, `MIN_INSERT_LEN` L340 |
-| Count evidence at one breakend | `count_at_breakend()` L268 | `COVERAGE_WINDOW` L338, `NGAP_*` L307–308, `MIN_SOFTCLIP_LEN` L339, `MIN_READ_MAPQ` L365, `COUNT_UNIQUE_FRAGMENTS` L370 |
-| Verify a supplementary alignment hits the partner | `sa_hits_partner()` L242 | `SA_PARTNER_TOLERANCE` L337 |
-| Assign the evidence tier | `rna_tier()` L338 | `STRONG_MIN_JUNCTION_READS` L324, `SUGGESTIVE_MIN_JUNCTION_READS` L328 |
+| Gene and disrupted-isoform TPM, with background gradient | `expression()` L39 | `TPM_GRADIENT` L329, `TPM_EXPRESSED` L334, `EXPRESSION_USES_BOTH_BREAKENDS` L338 |
+| Choose the only valid test for the geometry | `select_test()` L217 | `MIN_TESTABLE_GAP_SIZE` L360, `MIN_INSERT_LEN` L367 |
+| Count evidence at one breakend | `count_at_breakend()` L268 | `COVERAGE_WINDOW` L365, `NGAP_*` L307–308, `MIN_SOFTCLIP_LEN` L366, `MIN_READ_MAPQ` L392, `COUNT_UNIQUE_FRAGMENTS` L397 |
+| Verify a supplementary alignment hits the partner | `sa_hits_partner()` L242 | `SA_PARTNER_TOLERANCE` L364 |
+| Assign the evidence tier | `rna_tier()` L338 | `STRONG_MIN_JUNCTION_READS` L351, `SUGGESTIVE_MIN_JUNCTION_READS` L355 |
 
 Three rules are enforced here and declared in the manifest so a reader cannot
 mistake them:
@@ -215,7 +228,7 @@ produced these SV calls. In RNA it is not tunable: STAR emits only 0, 1, 3 and
 | Operation | Function | Criteria |
 |---|---|---|
 | The fixed-row funnel | `build_funnel()` L46, `FUNNEL_ROWS` | — |
-| Earliest sample carrying each breakpoint | `attribute()` L53 | `ATTRIBUTION_MATCH_TOLERANCE` L408 |
+| Earliest sample carrying each breakpoint | `attribute()` L53 | `ATTRIBUTION_MATCH_TOLERANCE` L435 |
 | Cross-sample table with per-1,000 rates | `compare_samples()` L106 | — |
 | Plain-language cautions attached to the numbers | `interpret()` L130 | — |
 

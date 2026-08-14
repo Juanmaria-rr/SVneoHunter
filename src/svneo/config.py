@@ -85,11 +85,28 @@ class Reference:
 
 @dataclass
 class Branch:
-    """A sensitivity branch. Branches differ ONLY in stage-1 admission, so any
-    difference in the result is attributable to admission and nothing else."""
+    """A sensitivity branch: the same sample judged under a different threshold,
+    so that any difference in the result is attributable to that threshold.
+
+    Branches differ in stage-1 admission and, for the panel count only, in
+    whether that count votes on privacy at stage 6. The panel needs both levers
+    because it reaches a candidate twice — once as an admission rule and once
+    inside `is_private` — and relaxing either alone leaves the other filtering.
+    Nothing else about a branch may differ, or the comparison stops being
+    attributable.
+    """
     name: str
-    pon_max: int | None = None          # None = no PON filter
+    pon_max: int | None = None          # None = this pipeline's PON threshold off
     gnomad_max_af: float | None = None  # None = no population filter
+
+    #: Admit records the CALLER rejected as panel hits (somatic `FILTER=PON`).
+    #: Without this, `pon_max=None` is a no-op on somatic call sets: those
+    #: records are dropped for not being PASS before `pon_max` is consulted.
+    admit_panel_filtered: bool = False
+
+    #: Whether the panel count votes on `is_private` (stage 6). False keeps it as
+    #: a reported column, leaving privacy to population frequency alone.
+    pon_in_privacy: bool = True
 
 
 @dataclass

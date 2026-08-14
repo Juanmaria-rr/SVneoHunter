@@ -13,7 +13,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from svneo import criteria, generators, rna, null_model, vcf  # noqa: E402
+from svneo import confidence, criteria, generators, rna, null_model, vcf  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -260,6 +260,68 @@ def test_frame_patch_is_applied():
     assert "start = end - self.cut_length + 1" in text
     assert (pathlib.Path(VENDOR_DIR) / "patches" /
             "001-pyensembl-stop-codon-frame.patch").exists()
+
+
+# ---------------------------------------------------------------------------
+# The panel filter acts at two points, and a branch must relax both
+#
+# These guard a specific silent failure: a branch declared with `pon_max: null`
+# and nothing else produced output IDENTICAL to the filtered branch on somatic
+# call sets, while being labelled unfiltered. The caller had already written its
+# panel verdict into FILTER, one step before `pon_max` is consulted.
+# ---------------------------------------------------------------------------
+
+def _breakends(*filters) -> "pd.DataFrame":
+    """A minimal admitted-breakend frame: mated, no panel count of our own."""
+    import pandas as pd
+    return pd.DataFrame({
+        "filter": list(filters),
+        "paired": [True] * len(filters),
+        "pon_count": [None] * len(filters),
+    })
+
+
+def test_pon_max_alone_cannot_reach_a_caller_filtered_somatic_record():
+    """The no-op that motivated `admit_panel_filtered`."""
+    breakends = _breakends("PASS", "PON", "PON", "INFERRED")
+    strict, _ = vcf.admit(breakends, "somatic", pon_max=None)
+    assert len(strict) == 1, \
+        "pon_max=None must NOT admit FILTER=PON on a somatic set; if it does, " \
+        "the two branches are no longer distinguishable by admission alone"
+
+
+def test_admit_panel_filtered_admits_pon_and_reports_how_many():
+    breakends = _breakends("PASS", "PON", "PON", "INFERRED")
+    relaxed, funnel = vcf.admit(breakends, "somatic", pon_max=None,
+                               admit_panel_filtered=True)
+    assert len(relaxed) == 3, f"expected PASS + 2 PON, got {len(relaxed)}"
+    assert funnel["caller_pon_admitted"] == 2, \
+        "the funnel must state how many panel-flagged records were admitted, " \
+        "or the relaxation is invisible in the output"
+    # INFERRED is not a panel judgement and must stay out in both branches.
+    assert "INFERRED" not in set(relaxed["filter"])
+
+
+def test_pon_still_votes_on_privacy_unless_told_otherwise():
+    """Relaxing admission alone leaves `is_private` filtering by panel count."""
+    import pandas as pd
+    events = pd.DataFrame({"sample_sv_id": ["a"], "pon_count": [3513.0]})
+
+    default = confidence.annotate_privacy(events, panel_size=12000, gnomad_af={})
+    assert not bool(default.is_private.iloc[0]), \
+        "a PON_COUNT of 3,513 must fail privacy while the panel votes"
+
+    reported = confidence.annotate_privacy(events, panel_size=12000, gnomad_af={},
+                                           pon_in_privacy=False)
+    assert bool(reported.is_private.iloc[0]), \
+        "with the panel reporting only, privacy rests on gnomAD alone"
+    # Reported, not discarded: the deciding value stays in the table either way.
+    assert reported.pon_count.iloc[0] == 3513.0
+    assert not bool(reported.pass_pon.iloc[0]), \
+        "pass_pon must still record that the event IS in the panel"
+    assert "not applied" in str(reported.privacy_note.iloc[0]), \
+        "the note must say the panel was reported rather than applied, or a " \
+        "reader cannot tell which basis produced is_private"
 
 
 # ---------------------------------------------------------------------------

@@ -59,11 +59,18 @@ def annotate_confidence(events: pd.DataFrame) -> pd.DataFrame:
 
 
 def annotate_privacy(events: pd.DataFrame, panel_size: int = 0,
-                     gnomad_af: dict | None = None) -> pd.DataFrame:
+                     gnomad_af: dict | None = None,
+                     pon_in_privacy: bool = True) -> pd.DataFrame:
     """Attach the two recurrence filters and the combined `is_private` verdict.
 
     `gnomad_af` maps sample_sv_id -> population allele frequency (see
     `annotate_gnomad()`); absent means "not matched in gnomAD", treated as AF 0.
+
+    `pon_in_privacy=False` keeps the panel count as an annotation only, so
+    `is_private` rests on population frequency alone. This is the SECOND place
+    the panel filter acts: relaxing admission alone still lets `is_private`
+    remove the very candidates the relaxed branch was run to see. `pass_pon` is
+    still computed and reported either way — what changes is whether it votes.
     """
     if events.empty:
         return events
@@ -99,10 +106,23 @@ def annotate_privacy(events: pd.DataFrame, panel_size: int = 0,
     out["pass_gnomad"] = out["gnomad_af_used"].map(
         lambda af: True if pd.isna(af) else float(af) < criteria.GNOMAD_MAX_AF)
     out["pass_pon"] = out["pass_pon"].fillna(False).astype(bool)
-    out["is_private"] = out["pass_pon"] & out["pass_gnomad"]
-    out["privacy_note"] = [
-        "gnomAD not evaluated — PON only" if pd.isna(af) else ""
-        for af in out["gnomad_af"]]
+    out["pon_in_privacy"] = pon_in_privacy
+    out["is_private"] = (out["pass_pon"] & out["pass_gnomad"]) if pon_in_privacy \
+        else out["pass_gnomad"]
+
+    # The note has to distinguish three different states that would otherwise all
+    # read as a bare `is_private` boolean: gnomAD missing, the panel deliberately
+    # not voting, and both criteria applied.
+    notes = []
+    for af, passed_pon in zip(out["gnomad_af"], out["pass_pon"]):
+        if not pon_in_privacy:
+            notes.append("gnomAD only — panel count reported, not applied"
+                         + ("" if passed_pon else "; this event IS in the panel"))
+        elif pd.isna(af):
+            notes.append("gnomAD not evaluated — PON only")
+        else:
+            notes.append("")
+    out["privacy_note"] = notes
     return out
 
 

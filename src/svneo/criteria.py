@@ -33,6 +33,33 @@ from collections import Counter
 #:              coordinates.
 SOMATIC_KEEP_FILTERS = frozenset({"PASS"})
 
+#: Somatic FILTER values admitted by a PANEL-REPORTING branch, where the panel
+#: count is annotated but never removes a candidate.
+#:
+#: WHY THIS SET IS NEEDED AT ALL. The panel filter reaches a candidate by two
+#: different routes, and relaxing one does nothing to the other:
+#:
+#:   germline VCFs  the panel is an INFO field, `PON_COUNT`, and it is this
+#:                  pipeline that thresholds it (`PON_MAX`). Setting the
+#:                  threshold to None is enough to stop filtering.
+#:   somatic VCFs   the caller has ALREADY applied its panel filter and recorded
+#:                  the verdict as `FILTER=PON`. `PON_MAX` never sees those
+#:                  records, because admission drops them one step earlier for
+#:                  not being PASS.
+#:
+#: A branch that only sets `pon_max=None` is therefore a no-op on somatic call
+#: sets — it produces output identical to the filtered branch while being
+#: labelled as unfiltered, which is worse than not running it. Measured on the
+#: RPE1 lines: 82, 58 and 96 records carry `FILTER=PON`, none of which
+#: `pon_max` could ever have reached.
+#:
+#: `INFERRED` stays out. That is not a panel judgement: the caller deduced the
+#: breakend from a copy-number transition with no read support, so there is no
+#: junction sequence to translate. Admitting it would add records that can only
+#: leave again at the peptide-generation step, while making the branch
+#: incomparable with the filtered one in a second, unrelated respect.
+SOMATIC_KEEP_FILTERS_REPORT_PON = frozenset({"PASS", "PON"})
+
 #: Germline/parental PON threshold. A record is kept when PON_COUNT < this.
 #:
 #: THIS IS AN ABSOLUTE COUNT, NOT A FREQUENCY. Interpret it against the panel

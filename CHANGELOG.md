@@ -10,6 +10,29 @@ per-dataset script.
 
 ### Added
 
+- **Panel-reporting branches.** A branch may now carry the panel of normals as
+  an annotation without filtering on it, via `admit_panel_filtered:` (admit
+  records the caller rejected as `FILTER=PON`) and `pon_in_privacy:` (keep the
+  panel count out of the `is_private` verdict). Both are needed because the
+  panel reaches a candidate twice, and on a somatic call set the caller has
+  already applied it as a `FILTER` value — a branch setting only `pon_max: null`
+  is a no-op there, producing output identical to the filtered branch under an
+  unfiltered label.
+- **`events_private_hc_and_rna`** in `summary.json`: the count of events
+  satisfying every criterion. The pre-existing `events_hc_and_rna` does not
+  include privacy, and both are now reported separately — an event can be
+  confidently called and transcribed while being a common polymorphism.
+- **HTML validation reports** (`tools/build_html_report.py`), one per sample and
+  branch: each filter rendered with what it measures, how, why, its threshold and
+  the threshold's justification, beside the count it removed and the names of
+  what it removed. Grain changes along the cascade are marked explicitly.
+
+### Fixed
+
+- The HTML report described `events_hc_and_rna` as "satisfies every criterion",
+  which overstated an event with `PON_COUNT` 3,513 and gnomAD popmax 0.905 as a
+  surviving candidate. Both reports now name the criteria each figure covers.
+
 - **Config-driven runs.** A run is defined by a reference peptide catalogue and a
   sample set; no cohort, tissue or cell line is named in the code. Samples form a
   lineage via `parent:`, which drives execution order and event attribution.

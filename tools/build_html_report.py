@@ -313,6 +313,24 @@ def _num(value, decimals: int = 0) -> str:
     return f"{number:,.{decimals}f}" if decimals else f"{number:,.0f}"
 
 
+def _truth(frame, column: str):
+    """A boolean Series from a column that may be text, missing, or absent."""
+    if not len(frame) or column not in frame.columns:
+        return pd.Series([False] * len(frame), index=frame.index)
+    return frame[column].astype(str).str.lower().isin(("true", "1"))
+
+
+def _pon_votes(events) -> bool | None:
+    """Did the panel count participate in `is_private` for this run?
+
+    Written by `annotate_privacy()`. None for a run that predates the column, so
+    a report never asserts which basis was used when it cannot know.
+    """
+    if not len(events) or "pon_in_privacy" not in events.columns:
+        return None
+    return bool(_truth(events, "pon_in_privacy").iloc[0])
+
+
 def _text(value) -> str:
     """A cell's text, with absence rendered as an em dash.
 
@@ -364,6 +382,58 @@ def named_losses(frame, column: str, keep_true: bool, caption: str,
                 entry[name] = _text(value)
         rows.append(entry)
     return losses(caption, rows[:40], columns)
+
+
+def panel_reported(admitted_pon, pon_voted, kind: str) -> str:
+    """The panel filter, deliberately not applied.
+
+    This block occupies the place a filter card would have. Without it the
+    cascade simply lacks a panel step, which reads as "the panel removed nothing"
+    rather than "the panel was reported and not enforced" — the opposite
+    conclusion from the same numbers.
+    """
+    routes = []
+    if kind == "germline":
+        routes.append("this pipeline's own <code>PON_COUNT</code> threshold "
+                      "(<code>PON_MAX</code>) is switched off")
+    if admitted_pon is not None:
+        routes.append(f"<b>{admitted_pon:,}</b> record(s) the caller had already "
+                      f"rejected as <code>FILTER=PON</code> were admitted and "
+                      f"annotated rather than dropped")
+    if pon_voted is False:
+        routes.append("the panel count does not vote in <code>is_private</code>, "
+                      "which rests on population frequency alone")
+    return f"""
+<section class="filter reported">
+  <header>
+    <h3>Panel of normals — reported, not applied</h3>
+    <div class="counts"><span class="n"><b>0</b><small>removed</small></span></div>
+  </header>
+  <dl>
+    <dt>What this branch does</dt>
+    <dd>The panel count is measured and carried into every table, but it removes
+    nothing: {"; ".join(routes)}.</dd>
+    <dt>Why a branch like this exists</dt>
+    <dd>The panel threshold is the single most consequential filter in the
+    cascade, and its cost cannot be read off a filtered run — the discarded
+    records are never annotated, so nothing records what they would have
+    matched. Running the same sample with the panel reported instead of enforced
+    makes that cost measurable rather than assumed.</dd>
+    <dt>How to read the tables that follow</dt>
+    <dd>With <code>pon_count</code>, <code>pon_fraction</code> and the nine
+    <code>gnomad_af_*</code> columns in view. An event surviving here is
+    <em>not</em> a candidate neoantigen by itself: a junction can be real,
+    expressed and confidently called while being a germline polymorphism carried
+    by most of the population. Measured on this lineage, the events with the
+    strongest RNA support are exactly the common ones.</dd>
+    <dt>Why not just lower the threshold</dt>
+    <dd>Because the panel reaches a candidate twice — once at admission and once
+    inside <code>is_private</code> — and on a somatic call set it arrives as a
+    <code>FILTER</code> value the caller already applied. Relaxing only the
+    numeric threshold changes nothing there: it would produce output identical to
+    the filtered branch under an unfiltered label.</dd>
+  </dl>
+</section>"""
 
 
 def filter_card(key: str, entered, passed, note: str = "", removed_detail: str = "") -> str:
@@ -421,6 +491,14 @@ def build(run_dir: str) -> str:
                              "This is a germline call set: every record passes FILTER by "
                              "construction, so the panel filter below does the work."
                              if kind == "germline" else ""))
+
+    # A branch that reports the panel instead of filtering on it has to say so
+    # HERE, where the filter would otherwise have been, or its absence is
+    # indistinguishable from a filter that removed nothing.
+    admitted_pon = s1.get("caller_pon_admitted")
+    pon_voted_here = _pon_votes(events) if len(events) else _pon_votes(sv)
+    if admitted_pon is not None or pon_voted_here is False:
+        cards.append(panel_reported(admitted_pon, pon_voted_here, kind))
     cards.append(filter_card("paired", s1.get("after_filter_pass", records),
                              s1.get("after_paired_only", 0)))
     pon_key = next((k for k in s1 if k.startswith("after_pon")), None)
@@ -527,7 +605,18 @@ def build(run_dir: str) -> str:
                    ["gene", "test", "junction reads", "min coverage", "why"])))
 
     # ---------------------------------------------------------------- verdict
-    both = counts.get("events_hc_and_rna", 0)
+    # `events_hc_and_rna` does NOT include privacy — the name says so, but an
+    # earlier version of this report described it as "satisfies every criterion",
+    # which overstated ITGA11 (gnomAD 0.905, PON_COUNT 3,513) as a survivor.
+    # The all-criteria count is its own figure; fall back to recomputing it when
+    # reading a run that predates it, rather than silently substituting.
+    hc_and_rna = counts.get("events_hc_and_rna", 0)
+    both = counts.get("events_private_hc_and_rna")
+    if both is None:
+        both = int((_truth(events, "is_private") & _truth(events, "sv_hc")
+                    & events.sample_sv_id.isin(
+                        rna[rna.rna_tier.isin(["STRONG", "SUGGESTIVE"])].sample_sv_id)).sum()) \
+            if len(events) and len(rna) and "rna_tier" in rna.columns else 0
     if not n_matches:
         emptied = ("no candidate peptide matched the catalogue" if productive
                    else "no admitted junction produced a candidate peptide at all")
@@ -576,11 +665,20 @@ def build(run_dir: str) -> str:
   stated criterion.</p>
 </section>"""
     else:
+        pon_voted = _pon_votes(events)
+        privacy_basis = ("population frequency alone — the panel count is "
+                         "reported in the table but does not vote in this branch"
+                         if pon_voted is False else
+                         "both the panel count and population frequency")
         verdict = f"""
 <section class="verdict survives">
   <h2>{both} candidate(s) satisfy every criterion</h2>
-  <p>Private to the sample, confidently called, and transcribed across the
-  junction. See the per-event table below.</p>
+  <p>Private, confidently called, <em>and</em> transcribed across the junction.
+  Privacy here rests on {privacy_basis}. See the per-event table below.</p>
+  <p class="note">A further <b>{hc_and_rna}</b> event(s) are confidently called
+  and transcribed but <b>not</b> private. Those two counts must not be conflated:
+  a real, expressed junction that is common in the population is a polymorphism,
+  not a recurrent tumour neoantigen.</p>
 </section>"""
 
     # ---------------------------------------------------------------- events
@@ -683,6 +781,8 @@ dd{{margin:0;color:var(--ink-soft);font-size:.96rem}}
 dd.thr{{font-family:var(--mono);font-size:.85rem;color:var(--amber)}}
 .note{{margin:0;padding:.75rem 1.2rem;background:var(--steel-soft);
  font-size:.9rem;border-top:1px solid var(--rule)}}
+.filter.reported{{border-left:3px solid var(--moss)}}
+.filter.reported h3{{color:var(--moss)}}
 .losses{{margin-top:1rem;border-top:1px solid var(--rule);padding-top:.8rem}}
 .losses summary{{cursor:pointer;font-size:.85rem;font-weight:600;color:var(--steel);
  letter-spacing:.01em}}

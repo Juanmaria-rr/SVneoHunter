@@ -105,19 +105,32 @@ def read_breakends(path: str) -> pd.DataFrame:
 
 
 def admit(breakends: pd.DataFrame, vcf_kind: str,
-          pon_max: int | None = None) -> tuple[pd.DataFrame, dict]:
+          pon_max: int | None = None,
+          admit_panel_filtered: bool = False) -> tuple[pd.DataFrame, dict]:
     """Apply stage-1 admission. Returns the admitted rows and a funnel dict.
 
-    `pon_max=None` disables the PON filter (the sensitivity branch). The funnel
-    records what each rule removed, because "how many were lost where" is the
-    part of a cascade that most often turns out to be the finding.
+    `pon_max=None` disables this pipeline's own PON threshold, which is all that
+    is needed on a germline call set. `admit_panel_filtered=True` additionally
+    admits records the CALLER already rejected as panel hits (`FILTER=PON`),
+    which is what a somatic call set needs — there, `pon_max` never sees those
+    records at all. Both are required for a branch that reports the panel
+    without filtering on it; see `criteria.SOMATIC_KEEP_FILTERS_REPORT_PON`.
+
+    The funnel records what each rule removed, because "how many were lost
+    where" is the part of a cascade that most often turns out to be the finding.
     """
     funnel = {"records": len(breakends)}
     kept = breakends
 
     if vcf_kind == "somatic":
         # The caller already applied its panel filter here; FILTER carries it.
-        kept = kept[kept["filter"].isin(criteria.SOMATIC_KEEP_FILTERS)]
+        keep = (criteria.SOMATIC_KEEP_FILTERS_REPORT_PON if admit_panel_filtered
+                else criteria.SOMATIC_KEEP_FILTERS)
+        if admit_panel_filtered:
+            # Reported, not filtered: state how many the caller had rejected, or
+            # the relaxation is invisible in the output.
+            funnel["caller_pon_admitted"] = int((kept["filter"] == "PON").sum())
+        kept = kept[kept["filter"].isin(keep)]
         funnel["after_filter_pass"] = len(kept)
     else:
         # Germline/parental sets are usually all-PASS by construction, so FILTER
