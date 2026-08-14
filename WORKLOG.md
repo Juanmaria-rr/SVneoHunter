@@ -7,6 +7,68 @@ what was tried, why, and what it showed.
 
 ---
 
+## 2026-08-14 — the executive summary, rewritten in full
+
+### Logic followed
+
+`docs/EXECUTIVE_SUMMARY.md` gave one section to RPE1-WT and a single table row to
+each of the other three lines. The request was the complete version: the method
+end to end with every criterion and its justification, then the results developed
+per cell line. Rewritten rather than added alongside — its old §3 was already
+"stage by stage, with the code", so a second document would have duplicated the
+thresholds and the two would have diverged. That failure mode is not theoretical
+here: this same document asserted "the panel branch does not apply to the derived
+lines", which was false.
+
+Structure: **Part A** the method, **Part B** the results. Stated at the top that
+Part B cannot be read without Part A, because a count means nothing without the
+criterion that produced it.
+
+### Changes made
+
+- `docs/EXECUTIVE_SUMMARY.md` rewritten, 742 lines. Part A covers each stage with,
+  per criterion: what it measures, how, the threshold, why that threshold, and
+  **what it does not capture** — including the criteria that are deliberately OFF
+  (`REQUIRE_SPANS_JUNCTION`, `SOFTCLIPS_TIER_EVENTS`, `COVERAGE_TIERS_EVENTS`,
+  `RUN_MHC_PREDICTION`), since a withdrawn criterion that goes unmentioned reads
+  as applied. Part B gives each line its cascade in both branches, its events
+  with genes named, and what the line does and does not show.
+- `tools/build_summary_html.py` — renders a `docs/` markdown file to a
+  self-contained page. One source, two outputs: the markdown stays canonical and
+  the page is generated, never edited.
+
+### Results
+
+`results/reports/EXECUTIVE_SUMMARY.html`, 56.9 KB, 38 anchored headings, 24
+tables each in its own scroll container, no external resources, light and dark
+themes.
+
+Every figure was verified against the run outputs rather than transcribed from
+memory. Three passes:
+
+1. every integer in `summary.json` for all eight runs appears in the document — 0
+   discrepancies
+2. every `CONSTANT = value` quoted matches `criteria.py` — 0 real discrepancies
+   (9 false positives from VCF fields such as `FILTER=PON`)
+3. the 13-event RPE1-WT table checked row by row against `credible_events.tsv`
+   joined to `stage8_rna_evidence.tsv`: gene order, SV type, privacy, confidence,
+   RNA test, coverage, crossing reads and tier — all match
+
+`check_docs.py` initially found ten stale line references, all of them line
+numbers I had written from memory. Corrected with `--fix-line-numbers`.
+
+The document's conclusions, unchanged by the rewrite but now stated with their
+grounds: no candidate in any line or branch is simultaneously private,
+confidently called and transcribed. The two that come closest fail for opposite
+reasons — ITGA11 has 31 crossing fragments and a popmax of 0.905; SLC9A9 is
+line-specific within the experiment and carries 0.222 in `asj` while being absent
+from the panel entirely. Neither is a recurrent tumour-derived neoantigen, and
+the second would have passed a panel-only privacy filter.
+
+### Open
+
+- Unchanged: strand skew, LILAC HLA typing, patch 001 upstream.
+
 ## 2026-08-14 — README audit for publication as SVneoHunter
 
 ### Logic followed
