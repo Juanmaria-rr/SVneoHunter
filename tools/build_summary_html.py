@@ -137,6 +137,8 @@ table code{font-size:.9em}
 .toc ol{list-style:none; padding:0; margin:0; max-width:none}
 .toc li{margin-bottom:.28rem}
 .toc li.sub{padding-left:1.2rem; font-size:.93em}
+.toc li.top{margin-top:.6rem; font-weight:600}
+.toc li.top:first-child{margin-top:0}
 .toc a{color:var(--ink); text-decoration:none}
 .toc a:hover{color:var(--accent); text-decoration:underline}
 
@@ -191,11 +193,14 @@ def render(source: str) -> tuple[str, str, str]:
     def anchor(match: re.Match) -> str:
         level, text = int(match.group(1)), match.group(2)
         identifier = slug(text)
-        # Only h2/h3 reach the contents list; deeper headings are detail.
+        # h1-h3 are anchored, so a cross-reference to a top-level section
+        # resolves; anything deeper is detail and stays out of the contents.
         entries.append((level, identifier, re.sub(r"<[^>]+>", "", text)))
         return f'<h{level} id="{identifier}">{text}</h{level}>'
 
-    body = re.sub(r"<h([23])>(.*?)</h\1>", anchor, converted, flags=re.S)
+    body = re.sub(r"<h([123])>(.*?)</h\1>", anchor, converted, flags=re.S)
+    # The document title is the page masthead, not a contents entry.
+    entries[:] = entries[1:] if entries and entries[0][0] == 1 else entries
 
     # Tables scroll inside their own container: a wide cascade table must never
     # make the page itself scroll sideways.

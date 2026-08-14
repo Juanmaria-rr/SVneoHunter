@@ -24,11 +24,14 @@ file is current without writing, so it can gate a commit.
 from __future__ import annotations
 
 import argparse
+import os
 import pathlib
 import re
 import sys
 
 import pandas as pd
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 DOCS = ["docs/EXECUTIVE_SUMMARY.md"]
@@ -125,6 +128,14 @@ def events_table(run: str) -> str:
     return "\n".join(lines)
 
 
+def analysis_block(name: str) -> str:
+    """A generated analysis table, by name. Extend here, not in the document."""
+    if name == "locus_vs_peptide":
+        import analyse_locus_vs_peptide as analysis
+        return analysis.markdown(analysis.analyse(analysis.load("noPON")))
+    return f"*Unknown analysis block `{name}`.*"
+
+
 def sync(text: str) -> tuple[str, int]:
     """Replace every marked region with a freshly generated table."""
     # The body is matched as its own group, and may be empty: a freshly added
@@ -139,7 +150,18 @@ def sync(text: str) -> tuple[str, int]:
         return (f"{match.group(1)}\n{events_table(match.group(2))}\n"
                 f"{match.group(4)}")
 
-    return pattern.sub(replace, text), filled
+    text, filled = pattern.sub(replace, text), filled
+
+    analysis = re.compile(
+        r"(<!--\s*analysis:(\S+?)\s*-->)(.*?)(<!--\s*/analysis:\2\s*-->)", re.S)
+
+    def replace_analysis(match: re.Match) -> str:
+        nonlocal filled
+        filled += 1
+        return (f"{match.group(1)}\n{analysis_block(match.group(2))}\n"
+                f"{match.group(4)}")
+
+    return analysis.sub(replace_analysis, text), filled
 
 
 def main() -> None:

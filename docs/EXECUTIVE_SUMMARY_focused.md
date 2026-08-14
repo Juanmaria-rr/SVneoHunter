@@ -244,6 +244,11 @@ alignment, no similarity score. A near-match is a different peptide that would b
 presented differently or not at all; anything looser answers a different
 question.
 
+The three are separated by two orders of magnitude in this dataset — 4,806
+junctions reach a shared locus for every 54 that reach a shared peptide. Why
+that gap exists, and what causes it, is measured in
+[Shared locus is not shared peptide](#shared-locus-is-not-shared-peptide).
+
 `master_sv.tsv` carries `patient_evidence` naming the strongest level each
 junction reaches (`identical_peptide`, `same_gene_and_svtype`, `same_gene`,
 `breakpoint_within_1kb|10kb|100kb`, `not_seen_in_patients`) alongside the
@@ -641,6 +646,91 @@ almost triples the candidate peptides (54 → 148). The catalogue match count st
 at zero. The panel filter was not hiding recurrent candidates here.
 
 ---
+
+# Shared locus is not shared peptide
+
+Junctions recur between patients and cell lines far more often than the peptides
+they produce do. This is the easiest way to overstate a recurrence result —
+reporting "we found matching SVs" when what matched was a place, not a
+consequence — so it is quantified here rather than asserted.
+
+<!-- analysis:locus_vs_peptide -->
+| Level reached | Junctions | % |
+|---|---|---|
+| **`identical_peptide`** | 54 | 0.7 |
+| `same_gene_and_svtype` | 327 | 4.4 |
+| `same_gene` | 115 | 1.5 |
+| `breakpoint_within_1kb` | 393 | 5.3 |
+| `breakpoint_within_10kb` | 1,241 | 16.6 |
+| `breakpoint_within_100kb` | 2,730 | 36.5 |
+| `not_seen_in_patients` | 2,611 | 34.9 |
+| *total* | 7,471 | |
+
+| Junctions within 1,000 bp of a patient breakpoint | n |
+|---|---|
+| produce no peptide at all — cannot match by construction | 354 |
+| **produce peptides, none matches** | **135** |
+| produce peptides and at least one matches | 23 |
+| *total* | 512 |
+
+| At the *same coordinate* as a patient breakpoint | n |
+|---|---|
+| junctions | 105 |
+| of which same SV type as the patient event | 92 |
+| of which carry inserted bases at the junction | 77 (median 7 bp) |
+| of which produce peptides | 91 |
+| **of which share a peptide** | **19** |
+<!-- /analysis:locus_vs_peptide -->
+
+**Locus-level recurrence exceeds peptide-level recurrence by 89:1**: 4,806
+junctions reach one of the locus or mechanism levels, against 54 reaching an
+identical peptide.
+
+### The causes are not interchangeable
+
+Of the junctions landing within 1 kb of a patient breakpoint, most could never
+have matched: they produce no peptide at all, being intergenic, intronic without
+protein consequence, or identical to the wild type. Only the second row of that
+table is the case of interest — same place, different sequence.
+
+### What makes the sequence differ
+
+The strongest test is the subset landing on the *exact* coordinate of a patient
+breakpoint: 105 junctions, 92 of them also of the same SV type. Nineteen share a
+peptide.
+
+Inserted bases at the junction separate the two groups:
+
+| At a shared coordinate, producing peptides | median `insert_len` |
+|---|---|
+| peptides do **not** match | 6 bp |
+| peptides match | 2 bp |
+
+Two breaks at the same position with different insertions build different fusion
+sequences, and an insertion that is not a multiple of three shifts the reading
+frame, so everything downstream translates differently — not a similar peptide,
+an unrelated one. Observed cases at distance 0 with no match: ANO9 (310 inserted
+bases), PLAT (301), THSD7B (95), CNTNAP2 (63).
+
+Two further mechanisms appear in the same subset. The SV type can differ at one
+locus (ANO9 and PLAT are duplications where the patient event is a deletion), and
+the lesion size can differ while the breakpoint coincides.
+
+### Even a matching junction matches few of its own peptides
+
+Of the peptides a matching junction produces, the median fraction found in the
+catalogue is **0.040**, with a minimum of 0.003 — PPP1R12A produces 302 candidate
+peptides of which 1 is in the catalogue.
+
+This is expected: an 8-11mer sliding window over a fusion protein yields dozens
+of overlapping sequences, and the catalogue holds only those that passed its own
+filters. But it means locus-level overlap almost never implies peptide-level
+overlap, which is why the level-1 cross is exact sequence identity rather than
+proximity.
+
+Reproduce with `python tools/analyse_locus_vs_peptide.py`, from the
+`patient_evidence`, `patient_bp_dist_bp`, `insert_len`, `n_peptides_generated`
+and `n_peptides_matched` columns of `master_sv.tsv`.
 
 # What this analysis does not answer
 
