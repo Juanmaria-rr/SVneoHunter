@@ -1,5 +1,12 @@
 # Executive summary — finding and validating SV-derived neopeptides
 
+
+> **This describes the full SV call set**, with the panel of normals measured and reported at every step but never used to remove a candidate. Each sample therefore appears once, under its own name.
+>
+> **Generated document — do not edit.** Built by `tools/build_focused_summary.py` from [`docs/EXECUTIVE_SUMMARY.md`](EXECUTIVE_SUMMARY.md). [`docs/EXECUTIVE_SUMMARY.md`](EXECUTIVE_SUMMARY.md) is the canonical version and additionally carries the panel-filtered comparison, the permutation null and “Interpreting the overall outcome”. Edit the source and rebuild.
+>
+> No *result* is omitted here: the panel-filtered call set is a strict subset of this one, so every event it reports appears below.
+
 How a catalogue of patient neopeptides is tested for recurrence in a set of
 samples, what each filter measures and why its threshold sits where it does, and
 what the four RPE1 cell lines actually showed.
@@ -421,80 +428,32 @@ rather than leaving 99.3% of its rows empty.
 
 ---
 
-<!-- focused:drop -->
-## The null model · `src/svneo/null_model.py`
-
-Raw match counts are not comparable between samples whose candidate universes
-differ by orders of magnitude — 20,710 candidates against 54. Every sample
-therefore reports a **per-1,000-candidate rate** and a permutation null.
-
-`NULL_STRATEGY = "shuffle_residues"`, `NULL_PERMUTATIONS = 1000`: each candidate
-peptide's residues are shuffled, preserving length and amino-acid composition,
-and the catalogue intersection is recomputed.
-
-**The null is measurably too lax, and by construction.** Shuffling residues
-destroys the sequence but keeps composition, so it estimates how often a peptide
-of this composition hits the catalogue by chance — not how often an unrelated
-*real* genomic rearrangement would. A real-sequence null would be higher, so the
-enrichment figures are upper bounds. They are reported because the direction is
-informative, not because the multiplier is exact.
-
-An enrichment ratio computed against a null mean at or below the resolution of
-1,000 permutations is not quotable at all: dividing by approximately zero
-produces an arbitrary number. Where that happens below, the per-1,000 rate is
-given instead.
-
-<!-- /focused:drop -->
 ---
 
 # Part B — results
 
 ## All four lines at a glance
 
-<!-- focused:drop -->
-Both branches for every line. `PON10` enforces the panel of normals; `noPON`
-reports it without filtering on it, at both the admission and the privacy step.
-<!-- /focused:drop -->
 
-| | WT<br>PON10 | WT<br>noPON | TP53<br>PON10 | TP53<br>noPON | BRCA1<br>PON10 | BRCA1<br>noPON | BRCA2<br>PON10 | BRCA2<br>noPON |
-|---|---|---|---|---|---|---|---|---|
-| SV records | 17,953 | 17,953 | 350 | 350 | 303 | 303 | 234 | 234 |
-| Caller `FILTER=PON` admitted | — | — | — | 82 | — | 58 | — | 96 |
-| Admitted breakends | 2,286 | 14,340 | 102 | 176 | 172 | 226 | 114 | 200 |
-| Junctions | 1,143 | 7,170 | 51 | 88 | 86 | 113 | 57 | 100 |
-| Junctions yielding peptides | 354 | 2,738 | 15 | 31 | 22 | 35 | 19 | 41 |
-| Candidate peptides | 20,710 | 63,036 | 64 | 78 | 536 | 572 | 54 | 148 |
-| **Distinct matches** | **64** | **288** | **0** | **0** | **21** | **21** | **0** | **0** |
-| Gene-concordant | 64 | 376 | — | — | 21 | 21 | — | — |
-| Credible | 57 | 331 | — | — | 21 | 21 | — | — |
-| **Events** | **13** | **46** | **0** | **0** | **1** | **1** | **0** | **0** |
-| Private | 9 | 24 | — | — | 0 | 0 | — | — |
-| High-confidence | 4 | 15 | — | — | 0 | 0 | — | — |
-| RNA-supported | 1 | 3 | — | — | 0 | 0 | — | — |
-| **Private + HC + RNA** | **0** | **0** | — | — | **0** | **0** | — | — |
+|  | WT | TP53 | BRCA1 | BRCA2 |
+| --- | --- | --- | --- | --- |
+| SV records | 17,953 | 350 | 303 | 234 |
+| Caller `FILTER=PON` admitted | — | 82 | 58 | 96 |
+| Admitted breakends | 14,340 | 176 | 226 | 200 |
+| Junctions | 7,170 | 88 | 113 | 100 |
+| Junctions yielding peptides | 2,738 | 31 | 35 | 41 |
+| Candidate peptides | 63,036 | 78 | 572 | 148 |
+| **Distinct matches** | **288** | **0** | **21** | **0** |
+| Gene-concordant | 376 | — | 21 | — |
+| Credible | 331 | — | 21 | — |
+| **Events** | **46** | **0** | **1** | **0** |
+| Private | 24 | — | 0 | — |
+| High-confidence | 15 | — | 0 | — |
+| RNA-supported | 3 | — | 0 | — |
+| **Private + HC + RNA** | **0** | — | **0** | — |
 
-<!-- focused:drop -->
-Matches per 1,000 candidates, with the permutation null:
-
-| Run | candidates | matches | per 1,000 | null mean ± sd | p |
-|---|---|---|---|---|---|
-| RPE1-WT PON10 | 20,710 | 64 | 3.09 | 1.33 ± 0.83 | < 0.001 |
-| RPE1-WT noPON | 63,036 | 288 | 4.57 | 2.74 ± 1.04 | < 0.001 |
-| RPE1-TP53-BRCA1 PON10 | 536 | 21 | 39.18 | 0.00 | < 0.001 |
-| RPE1-TP53-BRCA1 noPON | 572 | 21 | 36.71 | 0.00 | < 0.001 |
-| RPE1-TP53 (both) | 64 / 78 | 0 | 0.00 | 0.00 | 1 |
-| RPE1-TP53-BRCA2 (both) | 54 / 148 | 0 | 0.00 | 0.00 | 1 |
-
-<!-- /focused:drop -->
 ### How to read this table
 
-<!-- focused:drop -->
-**Privacy is read against its branch, not across branches.** WT's private count
-rises from 9 to 24 on `noPON` while the branch is *less* selective. That is not a
-gain: on `noPON` privacy rests on population frequency alone, so a different
-question is being answered, not the same one more loosely.
-
-<!-- /focused:drop -->
 **Privacy here rests on population frequency alone.** The panel count is in every
 table and in the per-event listings below, but it does not remove anything, so an
 event marked private may still carry a high `PON_COUNT`. Read the two columns
@@ -504,13 +463,6 @@ together.
 and transcribed while being a germline polymorphism carried by most of the
 population. `Private + HC + RNA` is the figure to quote; it is **0 everywhere**.
 
-<!-- focused:drop -->
-**Relaxing the panel adds junctions to the derived lines and no matches.** The
-82, 58 and 96 caller-rejected records raise the junction counts by 73%, 31% and
-75%, and change the distinct-match count by nothing at all: 0, 21, 0. Whatever
-limits recurrence detection in the derived lines, it is not the panel filter.
-This is a negative result, and it is the result the branch was run to obtain.
-<!-- /focused:drop -->
 
 ---
 
@@ -520,65 +472,12 @@ Germline call set, and by far the largest: 17,953 records against 234–350 for 
 derived lines. That is expected — it is the whole background genome, not what was
 acquired relative to a parent.
 
-<!-- focused:drop -->
-### The cascade, `PON10`
-
-| Step | n | Removed |
-|---|---|---|
-| SV records | 17,953 | |
-| after FILTER | 17,953 | 0 — germline sets are all-PASS by construction |
-| paired breakends | 14,340 | −3,613 single breakends |
-| `PON_COUNT < 10` | 2,286 | **−12,054** |
-| → junctions | 1,143 | pairing halves the count |
-| producing a peptide | 354 | −789 hit no coding transcript |
-| candidate peptides | 20,710 | from 24,548 rows |
-| identical to catalogue | 64 | |
-| gene-concordant | 64 | −0 |
-| high-complexity, non-self | 57 | −7 low-complexity |
-| **→ events** | **13** | 57 peptides collapse to 13 loci |
-
-The panel filter removes 84% of paired breakends. Its measured cost, recovered
-from the unfiltered branch: **53 junctions that did match the catalogue**.
-
-### The 13 events
-
-| Gene | Type | Size | Peptides | PON | gnomAD popmax | Private | HC | RNA test | min cov | Crossing | Tier |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| EEF1A1 | DEL | 48 | 3 | — | — | yes | no | sizegap | 36 | 0 | NONE |
-| AGMO | DUP | 124 | 3 | 3 | 0.356 (fin) | **no** | yes | insertion | 2 | 0 | NONE |
-| PTPRN2 | DUP | 67 | 4 | — | 0.006 (amr) | **no** | no | insertion | 0 | 0 | NONE |
-| CSMD1 | DEL | 1,256 | 10 | 3 | 0.015 (nfe) | **no** | yes | sizegap | 0 | 0 | NONE |
-| NTRK1 | BND | — | 1 | — | — | yes | no | chimeric | 4 | 0 | NONE |
-| MAP2K3 | BND | — | 1 | — | — | yes | no | chimeric | 170 | 0 | NONE |
-| PPP1R12A | DUP | 32 | 1 | 3 | — | yes | no | sizegap | 620 | 0 | NONE |
-| GOLGA3 | DEL | 2 | 1 | 3 | — | yes | no | insertion | 456 | **2** | **WEAK** |
-| RPH3AL | DEL | 131 | 23 | — | — | yes | yes | insertion | 1 | 0 | NONE |
-| DLGAP1 | BND | — | 7 | — | — | yes | no | chimeric | 0 | 0 | NONE |
-| VSTM2B | INS | 36 | 1 | 7 | — | yes | no | insertion | 0 | 0 | NONE |
-| CMSS1 | DEL | 849 | 1 | 1 | 0.460 (ami) | **no** | yes | sizegap | 27 | 0 | NONE |
-| MUC4 | DUP | 3,215 | 1 | — | — | yes | no | sizegap | 2 | 0 | NONE |
-
-No event satisfies every criterion. The three final criteria are overlapping
-sets, not a chain — all start from the 13 events, and one event can fail several:
-4 fail privacy, 9 fail the confidence bar, 12 have no crossing read.
-
-Two observations on reading the table. CMSS1 has `PON_COUNT` 1 — as clean as the
-panel reports — with a population frequency of 0.345 `nfe`, 0.376 `amr`,
-0.460 `ami`.
-And `min_coverage` is not evidence: PPP1R12A sits under 620 reads and MAP2K3
-under 170, with zero crossing the junction.
-
-### The full call set (`noPON`)
-
-<!-- focused:drop -->
-46 events instead of 13, 288 distinct matches instead of 64.
-<!-- /focused:drop -->
 With the panel of normals reported rather than enforced, RPE1-WT yields **46
 credible genomic events** from 288 distinct catalogue matches. Three carry
 junction-crossing reads in RNA; all 46 are listed below, strongest evidence
 first.
 
-<!-- events:RPE1-WT_noPON -->
+<!-- events:RPE1-WT -->
 | Gene | Type | Size | Peptides | PON | gnomAD nfe | gnomAD amr | gnomAD max | Private | HC | RNA test | min cov | Crossing | Tier |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | ITGA11 | DEL | 220 | 2 | 3,513 | 0.768 | 0.744 | 0.905 (afr) | **no** | yes | sizegap | 2,412 | 31 | STRONG |
@@ -627,7 +526,7 @@ first.
 | RPTOR | DEL | 927 | 1 | 2,404 | 0.555 | 0.571 | 0.605 (afr) | **no** | yes | sizegap | 286 | 0 | — |
 | SHANK2 | INS | 43 | 1 | 3,073 | 0.853 | 0.773 | 0.875 (eas) | **no** | no | insertion | 60 | 0 | — |
 | USH2A | DEL | 529 | 3 | 538 | 0.081 | 0.070 | 0.168 (afr) | **no** | yes | insertion | 0 | 0 | — |
-<!-- /events:RPE1-WT_noPON -->
+<!-- /events:RPE1-WT -->
 
 Three events carry junction-crossing reads. Their figures, from the table above:
 
@@ -650,16 +549,16 @@ than a gap test.
 Somatic call set relative to RPE1-WT. 350 records, of which the caller rejected
 160 as `INFERRED` and 82 as `PON`.
 
-| Step | PON10 | noPON |
-|---|---|---|
-| SV records | 350 | 350 |
-| Caller `FILTER=PON` admitted | — | 82 |
-| after FILTER | 108 | 190 |
-| paired | 102 | 176 |
-| junctions | 51 | 88 |
-| producing a peptide | 15 | 31 |
-| candidate peptides | 64 | 78 |
-| **matches** | **0** | **0** |
+| Step | n |
+| --- | --- |
+| SV records | 350 |
+| Caller `FILTER=PON` admitted | 82 |
+| after FILTER | 190 |
+| paired | 176 |
+| junctions | 88 |
+| producing a peptide | 31 |
+| candidate peptides | 78 |
+| **matches** | **0** |
 
 **Nothing reaches the RNA stage, and that is not a null RNA result.** The chain
 stops at the catalogue cross: no candidate peptide matched, so stages 6–8 had
@@ -669,10 +568,6 @@ distinction matters, because zero would assert "tested and not transcribed".
 The reason is the candidate universe, not the filters. 51 junctions produce 64
 candidate peptides — against a catalogue of 2,856. Admitting the 82 panel-flagged
 records raises this to 78 candidates and still yields nothing.
-<!-- focused:drop -->
-With a universe this small, the permutation null also produces zero matches, so
-`p = 1` here means "indistinguishable from chance", not "significantly absent".
-<!-- /focused:drop -->
 
 ---
 
@@ -680,26 +575,26 @@ With a universe this small, the permutation null also produces zero matches, so
 
 The only derived line with a catalogue match.
 
-| Step | PON10 | noPON |
-|---|---|---|
-| SV records | 303 | 303 |
-| Caller `FILTER=PON` admitted | — | 58 |
-| after FILTER | 176 | 234 |
-| paired | 172 | 226 |
-| junctions | 86 | 113 |
-| producing a peptide | 22 | 35 |
-| candidate peptides | 536 | 572 |
-| **distinct matches** | **21** | **21** |
-| credible | 21 | 21 |
-| **events** | **1** | **1** |
+| Step | n |
+| --- | --- |
+| SV records | 303 |
+| Caller `FILTER=PON` admitted | 58 |
+| after FILTER | 234 |
+| paired | 226 |
+| junctions | 113 |
+| producing a peptide | 35 |
+| candidate peptides | 572 |
+| **distinct matches** | **21** |
+| credible | 21 |
+| **events** | **1** |
 
 ### The single event
 
-<!-- events:RPE1-TP53-BRCA1_noPON -->
+<!-- events:RPE1-TP53-BRCA1 -->
 | Gene | Type | Size | Peptides | PON | gnomAD nfe | gnomAD amr | gnomAD max | Private | HC | RNA test | min cov | Crossing | Tier |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | SLC9A9 | DEL | 52 | 21 | — | 0.209 | 0.137 | 0.222 (asj) | **no** | no | sizegap | 3 | 0 | — |
-<!-- /events:RPE1-TP53-BRCA1_noPON -->
+<!-- /events:RPE1-TP53-BRCA1 -->
 
 Three things to note when reading this row.
 
@@ -711,30 +606,21 @@ normals, yet carries a population frequency of 0.209 `nfe`, 0.137 `amr`,
 0.222 `asj`.* Line-specific within this experiment and rare in the population are
 separate properties; only the gnomAD column speaks to the second.
 
-<!-- focused:drop -->
-*Its match rate is high over a small denominator.* 36.71 matches per 1,000
-candidates against RPE1-WT's 4.57, from a universe of 572 candidate peptides — a
-rate over so few candidates moves by whole multiples when one event is added or
-removed.
-Its enrichment ratio is not quotable: the permutation null mean is 0.000, at or
-below the resolution of 1,000 permutations, so the ratio divides by
-approximately zero.
-<!-- /focused:drop -->
 
 ---
 
 ## RPE1-TP53-BRCA2
 
-| Step | PON10 | noPON |
-|---|---|---|
-| SV records | 234 | 234 |
-| Caller `FILTER=PON` admitted | — | 96 |
-| after FILTER | 121 | 217 |
-| paired | 114 | 200 |
-| junctions | 57 | 100 |
-| producing a peptide | 19 | 41 |
-| candidate peptides | 54 | 148 |
-| **matches** | **0** | **0** |
+| Step | n |
+| --- | --- |
+| SV records | 234 |
+| Caller `FILTER=PON` admitted | 96 |
+| after FILTER | 217 |
+| paired | 200 |
+| junctions | 100 |
+| producing a peptide | 41 |
+| candidate peptides | 148 |
+| **matches** | **0** |
 
 As with RPE1-TP53, **the RNA stage never ran**; its columns are `NA`, not zero.
 
@@ -748,52 +634,18 @@ at zero. The panel filter was not hiding recurrent candidates here.
 # What this analysis does not answer
 
 - **Presentation.** Read evidence supports "the junction is transcribed", not
-  that the peptide is processed, loaded and displayed. <!-- focused:drop -->That would require
-  immunopeptidome mass spectrometry. HLA typing (LILAC) has not been run on these
-  lines, so even *predicted* presentability is unavailable.<!-- /focused:drop -->
+  that the peptide is processed, loaded and displayed.
 - **Convergent peptides arising in a different gene** — excluded by construction
-  through gene concordance. <!-- focused:drop -->A deliberate trade of sensitivity for
-  specificity, which has to be stated whenever "credible" counts are quoted.<!-- /focused:drop -->
+  through gene concordance.
 - **Single breakends** — dropped at admission, since a junction peptide needs two
-  coordinates. <!-- focused:drop -->Some of them are real rearrangements; this is a limitation,
-  not a quality judgement.<!-- /focused:drop -->
-- **Whether a negative RNA result means the lesion is absent.** It does not. <!-- focused:drop -->The
-  gene may not be expressed in that sample, and nonsense-mediated decay of an
-  aberrant transcript is a real possibility.<!-- /focused:drop -->
+  coordinates.
+- **Whether a negative RNA result means the lesion is absent.** It does not.
 - **Anything strand-controlled** — an unexplained strand skew is unresolved
-  ([`OPEN_QUESTIONS.md`](OPEN_QUESTIONS.md)). <!-- focused:drop -->The catalogue is 61.0% minus-strand
-  (n = 379, p = 1.6 × 10⁻⁶ against a length-weighted background) while RPE1-WT's
-  candidates are 43.7% (n = 174). The 5′/3′ assignment has been verified
-  strand-aware — pyensembl returns exons 5′→3′, confirmed on four minus-strand
-  genes — so the cause is elsewhere and unidentified.<!-- /focused:drop -->
+  ([`OPEN_QUESTIONS.md`](OPEN_QUESTIONS.md)).
 - **Absolute panel counts as frequencies.** `PON_COUNT` is a count, and means
   nothing without the panel size; `pon_fraction` is reported beside it.
 - **Comparability of match rates between samples** whose candidate universes
   differ by orders of magnitude — 20,710 candidates against 54.
-
-# Interpreting the overall outcome
-
-Reducing a four-figure candidate count to a single-digit believable set is the
-**expected** outcome, not a failed analysis: a 28-team benchmark found roughly 6%
-of top-ranked neoantigen predictions validate functionally. What matters is that
-every order of magnitude lost is attributable to a stated criterion, which is
-what the funnel and the per-filter reports provide.
-
-The headline result across all four lines and both branches is that **no
-candidate is simultaneously private, confidently called and transcribed**. The
-two events that come closest fail for opposite reasons: ITGA11 has excellent read
-support and is a common polymorphism; SLC9A9 is line-specific within the
-experiment and is also common in the population. Neither is a recurrent
-tumour-derived neoantigen.
-
-That the catalogue peptides are found at 48–105× the composition-matched null in
-RPE1-WT says the overlap is not random string coincidence. What the per-event
-analysis then says is that the overlap is dominated by shared **germline**
-variation — which is exactly what a recurrence test between unrelated genomes
-should be expected to surface first, and exactly what the privacy filters exist
-to remove.
-
----
 
 # Reproducing this
 

@@ -227,13 +227,21 @@ def main() -> None:
 
     # The first paragraph after the title serves as the standfirst; strip it from
     # the body so it is not printed twice.
+    #
+    # Both patterns are anchored at the start and forbidden from crossing a
+    # closing tag. A single `<h1>.*?</h1>` here is NOT safe with re.DOTALL: a
+    # document with several level-1 headings (Part A, Part B, …) lets the lazy
+    # quantifier run to a *later* `</h1>` when the title is not immediately
+    # followed by a paragraph, silently swallowing the body. That deleted 47,550
+    # of 49,774 characters and produced a page that still looked plausible.
     lead = ""
-    match = re.search(r"<h1>.*?</h1>\s*<p>(.*?)</p>", body, re.S)
-    if match:
-        lead = match.group(1)
-        body = body.replace(match.group(0), "", 1)
-    else:
-        body = re.sub(r"<h1>.*?</h1>", "", body, count=1, flags=re.S)
+    title_match = re.match(r"\s*<h1>(?:(?!</h1>).)*</h1>\s*", body, re.S)
+    if title_match:
+        body = body[title_match.end():]
+    lead_match = re.match(r"<p>(?:(?!</p>).)*</p>\s*", body, re.S)
+    if lead_match:
+        lead = re.match(r"<p>(.*)</p>\s*", lead_match.group(0), re.S).group(1)
+        body = body[lead_match.end():]
 
     revision = "uncommitted"
     try:

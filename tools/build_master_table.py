@@ -116,7 +116,7 @@ def build_peptide_table(run_dir: str, label: str) -> pd.DataFrame:
         return pd.DataFrame()
 
     table = matches.copy()
-    table.insert(0, "sample", label)
+    identify(table, label)
     table["sample_sv_id"] = table["sv_id"].astype(str)
 
     for extra in (_read(os.path.join(run_dir, "credible_events.tsv")),
@@ -147,7 +147,7 @@ def build_sv_table(run_dir: str, label: str) -> pd.DataFrame:
         return pd.DataFrame()
 
     table = junctions.copy()
-    table.insert(0, "sample", label)
+    identify(table, label)
     table["sample_sv_id"] = table["sample_sv_id"].astype(str)
 
     # Gene and transcript annotation, from the generator's own output.
@@ -299,11 +299,54 @@ def column_dictionary(table: pd.DataFrame, gates) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def identify(table, label: str) -> None:
+    """Insert the run identifier, split into the two things it conflates.
+
+    `sample` is the run directory, which is how a row is traced back to the
+    outputs and the criteria manifest that produced it. But reports name the
+    cell line alone, so cross-referencing a table row against a report meant
+    reading past a suffix. Both are now columns:
+
+        sample     RPE1-WT_noPON     the run — unique, matches results/<dir>
+        cell_line  RPE1-WT           the biological sample, as reports name it
+        branch     noPON             which thresholds produced this row
+
+    Splitting them also makes the table groupable by line across branches, which
+    a single concatenated string does not allow.
+    """
+    cell_line, _, branch = label.partition("_")
+    table.insert(0, "branch", branch or "default")
+    table.insert(0, "cell_line", cell_line)
+    table.insert(0, "sample", label)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--results-dir", default="results")
+    ap.add_argument("--runs", nargs="*", metavar="RUN",
+                    help="restrict the COMBINED table to these run directories "
+                         "(e.g. RPE1-WT_noPON). Per-run tables are still written "
+                         "for every run.")
+    ap.add_argument("--suffix", default="",
+                    help="suffix for the combined filenames, so a restricted "
+                         "table cannot overwrite the full one "
+                         "(e.g. --suffix _noPON -> master_sv_noPON.tsv)")
     args = ap.parse_args()
+
+    available = sorted(
+        e for e in os.listdir(args.results_dir)
+        if os.path.exists(os.path.join(args.results_dir, e, "summary.json")))
+    if args.runs:
+        # A run name that matches nothing must fail loudly. Silently combining
+        # fewer runs than asked for produces a table that looks complete and is
+        # not — and this table is the one shared as the record of a report.
+        unknown = [r for r in args.runs if r not in available]
+        if unknown:
+            raise SystemExit(
+                "these runs do not exist in " + args.results_dir + ":\n  "
+                + "\n  ".join(unknown) + "\n\navailable:\n  "
+                + "\n  ".join(available))
 
     peptide_tables, sv_tables = [], []
     for entry in sorted(os.listdir(args.results_dir)):
@@ -314,13 +357,17 @@ def main() -> None:
 
         peptides = build_peptide_table(run_dir, entry)
         svs = build_sv_table(run_dir, entry)
+        # Per-run tables are always written; only the combined one is filtered.
+        in_scope = (not args.runs) or entry in args.runs
         if not peptides.empty:
             peptides.to_csv(os.path.join(run_dir, "master_peptides.tsv"),
                             sep="\t", index=False)
-            peptide_tables.append(peptides)
+            if in_scope:
+                peptide_tables.append(peptides)
         if not svs.empty:
             svs.to_csv(os.path.join(run_dir, "master_sv.tsv"), sep="\t", index=False)
-            sv_tables.append(svs)
+            if in_scope:
+                sv_tables.append(svs)
         written = [n for n, frame in (("master_sv.tsv", svs),
                                       ("master_peptides.tsv", peptides))
                    if not frame.empty]
@@ -332,11 +379,13 @@ def main() -> None:
         if not tables:
             continue
         combined = pd.concat(tables, ignore_index=True)
-        path = os.path.join(args.results_dir, f"{name}.tsv")
+        path = os.path.join(args.results_dir, f"{name}{args.suffix}.tsv")
         combined.to_csv(path, sep="\t", index=False)
         column_dictionary(combined, gates).to_csv(
             path.replace(".tsv", "_column_dictionary.tsv"), sep="\t", index=False)
-        print(f"\ncombined {name}: {len(combined)} rows x {len(combined.columns)} columns")
+        scope = ", ".join(args.runs) if args.runs else "every run"
+        print(f"\ncombined {name}{args.suffix}: {len(combined)} rows x "
+              f"{len(combined.columns)} columns  [{scope}]")
         print(f"  {path}")
         print(f"  {path.replace('.tsv', '_column_dictionary.tsv')}")
 
