@@ -43,7 +43,12 @@ from __future__ import annotations
 import argparse
 import os
 
+import sys
+
 import pandas as pd
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import column_meanings  # noqa: E402
 
 #: Peptide-grain gates, in the order the pipeline applies them.
 PEPTIDE_GATES = [
@@ -259,42 +264,58 @@ def build_sv_table(run_dir: str, label: str) -> pd.DataFrame:
 
 
 def column_dictionary(table: pd.DataFrame, gates) -> pd.DataFrame:
-    """What each column means and where it came from."""
+    """What each column means, where it came from, and how populated it is.
+
+    The meanings live in `tools/column_meanings.py`, one written entry per
+    column. A column with no entry is reported as `UNDOCUMENTED` rather than
+    left blank, so it is visible in the artefact itself instead of being
+    mistaken for a column whose meaning is obvious.
+    """
     gate_help = dict(gates)
-    generator = {"prefix", "sv_id", "chrom1", "pos1", "gene1", "transcript_id1",
-                 "chrom2", "pos2", "gene2", "transcript_id2", "svtype", "frameshift",
-                 "junction_nt", "junction_aa", "spans_junction", "neopeptide",
-                 "pep_length"}
-    sv_level = {"junction_key", "span", "event_size", "insert_len", "insert_seq",
-                "pon_count", "vf_bp1", "vf_bp2", "qual_bp1", "qual_bp2", "filter",
-                "segmapq_bp1", "segmapq_bp2", "pon_fraction", "panel_size_estimate",
-                "gnomad_af", "privacy_note", "sv_hc", "is_private", "pass_pon",
-                "pass_gnomad"}
-    rna_level = {"test", "test_reason", "coverage_bp1", "coverage_bp2", "min_coverage",
-                 "softclip_bp1", "softclip_bp2", "junction_reads", "rna_tier",
-                 "min_side_TPM", "expressed", "gene1_TPM", "gene2_TPM",
-                 "isoform1_TPM", "isoform2_TPM"}
+    origins = [
+        (lambda c: c in ("sample", "cell_line", "branch", "sample_sv_id",
+                         "junction_key", "prefix", "sv_id"), "identity"),
+        (lambda c: c.startswith(("ref_", "or_", "hla_pres", "confirmed_", "is_cfs",
+                                 "any_top50", "significant_", "unique_breaks",
+                                 "compat_", "incompat_", "present_not_")),
+         "reference catalogue"),
+        (lambda c: c.startswith("patient_"), "stage 3 — patient cross"),
+        (lambda c: c.startswith("gnomad_") or c in ("pon_count", "pon_fraction",
+                                                    "panel_size_estimate",
+                                                    "pass_pon", "pass_gnomad",
+                                                    "is_private", "privacy_note",
+                                                    "pon_in_privacy"),
+         "stage 6 — population frequency"),
+        (lambda c: c in ("sv_hc",) or c.endswith(("_bp1", "_bp2")) and
+         any(c.startswith(k) for k in ("vf", "sf", "df", "ref", "qual", "segmapq",
+                                       "homseq", "imprecise", "alt")),
+         "SV call"),
+        (lambda c: c.endswith("TPM") or c in ("expressed", "min_side_TPM",
+                                              "retained_intron", "isofox_fusion",
+                                              "isofox_fusion_support")
+         or c.startswith(("alt_sj", "nearest_alt_sj")), "stage 7 — expression"),
+        (lambda c: c in ("test", "test_reason", "junction_reads", "rna_tier")
+         or c.startswith(("coverage_", "min_coverage", "softclip_", "junction_by_",
+                          "alignments_", "low_mapq_")), "stage 8 — junction reads"),
+        (lambda c: c.startswith("n_peptides") or c in ("gene_concordant",
+                                                       "low_complexity", "is_self",
+                                                       "credible",
+                                                       "catalogue_genes"),
+         "stages 3-5 — cross and QC"),
+        (lambda c: True, "stage 1-2 — call and annotation"),
+    ]
 
     rows = []
     for column in table.columns:
-        if column in gate_help:
-            origin, meaning = "criterion", gate_help[column]
-        elif column.startswith(("ref_", "or_", "hla_pres", "confirmed_", "is_cfs",
-                                "any_top50", "significant_", "unique_breaks",
-                                "compat_", "incompat_", "present_not_")):
-            origin, meaning = "reference catalogue", "original catalogue column"
-        elif column in generator:
-            origin, meaning = "peptide generator", "as emitted per peptide"
-        elif column in sv_level:
-            origin, meaning = "SV call / stage 6", "event-level evidence"
-        elif column in rna_level:
-            origin, meaning = "stage 7-8", "expression and junction evidence"
-        elif column.startswith("n_peptides"):
-            origin, meaning = "pipeline", "how far this junction got"
-        else:
-            origin, meaning = "pipeline", ""
+        origin = next(label for test, label in origins if test(column))
+        meaning = column_meanings.MEANINGS.get(column)
+        if meaning is None:
+            meaning = gate_help.get(column, "UNDOCUMENTED — add an entry to "
+                                            "tools/column_meanings.py")
         rows.append({"column": column, "origin": origin, "meaning": meaning,
                      "non_null": int(table[column].notna().sum()),
+                     "pct_populated": round(
+                         100 * table[column].notna().sum() / max(len(table), 1), 1),
                      "example": next((str(v) for v in table[column].dropna()[:1]), "")})
     return pd.DataFrame(rows)
 

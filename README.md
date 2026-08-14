@@ -570,13 +570,14 @@ peptide catalogue and a set of samples, and follow [Quick start](#quick-start).
 
 | Tool | Question it answers |
 |---|---|
-| `tools/build_master_table.py` | two tables of **values, not verdicts**: `master_sv.tsv` (one row per admitted junction) and `master_peptides.tsv` (one row per matched peptide) |
+| `tools/build_master_table.py` | two tables of **values, not verdicts**: `master_sv.tsv` (one row per admitted junction) and `master_peptides.tsv` (one row per matched peptide), each with a column dictionary. `--runs`/`--suffix` restrict the combined table to the runs a given report covers |
 | `tools/build_report.py` | a technical results report per sample, in markdown, generated from its outputs |
 | `tools/build_html_report.py` | the same run as a **filter-by-filter validation page**: each filter with what it measures, how, why, its threshold and the threshold's justification, beside the count it removed and the names of what it removed. `--all` for every run |
 | `tools/build_summary_html.py` | renders a `docs/` markdown document to a self-contained, shareable HTML page. The markdown stays canonical; the page is generated, never edited |
 | `tools/build_focused_summary.py` | derives a single-branch version of a document — drops branch-comparison blocks, removes the other branch's table columns, and can drop whole sections by heading. Avoids a second hand-written document that would diverge from the first |
 | `tools/sync_event_tables.py` | fills the events tables in `docs/` from the run outputs, so a results table in prose cannot drift from the run it describes. `--check` gates a commit |
 | `tools/check_docs.py` | verifies the documentation still describes the code; exits 1 if stale |
+| `tools/column_meanings.py` | one written explanation per master-table column, emitted into `<table>_column_dictionary.tsv`. A column with no entry is marked `UNDOCUMENTED` in the artefact and fails the test suite, so a new column cannot ship unexplained |
 | `tools/check_strand_bias.py` | strand composition against a length-weighted background (see open questions) |
 | `tools/inspect_insertion.py` | the individual reads behind an insertion call, with mapping quality, duplicate flag and in-read offset, against a background rate — is this support real or a duplicate stack? |
 | `tools/compare_generators.py` | do two peptide generators produce interchangeable output? Run before swapping one. |

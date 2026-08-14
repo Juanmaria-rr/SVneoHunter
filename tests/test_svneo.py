@@ -365,6 +365,37 @@ def test_unedited_template_reports_every_placeholder_at_once():
 
 
 # ---------------------------------------------------------------------------
+# Every column of a shared table must carry an explanation
+#
+# The master tables are what someone is handed when they want to check a result
+# themselves. A column whose meaning has to be guessed is worse than an absent
+# one: `pon_count` looks like a frequency, `coverage_bp1` looks like evidence,
+# `softclip_bp1` looks like junction support. None of those readings is right.
+# ---------------------------------------------------------------------------
+
+def test_every_documented_column_has_a_written_meaning():
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
+    import column_meanings
+
+    empty = [name for name, text in column_meanings.MEANINGS.items()
+             if not text or len(text) < 25]
+    assert not empty, f"placeholder meanings: {empty}"
+
+    # Any table already produced must be fully covered. Nothing to check on a
+    # fresh clone, which has no results — the assertion is on what exists.
+    import glob
+    for path in glob.glob(os.path.join(
+            os.path.dirname(__file__), "..", "results", "master_*.tsv")):
+        if "column_dictionary" in path:
+            continue
+        with open(path) as handle:
+            columns = handle.readline().rstrip("\n").split("\t")
+        missing = column_meanings.check(columns)
+        assert not missing, \
+            f"{os.path.basename(path)} has undocumented columns: {missing}"
+
+
+# ---------------------------------------------------------------------------
 # The manifest must be complete
 # ---------------------------------------------------------------------------
 
