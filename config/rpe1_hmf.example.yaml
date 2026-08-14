@@ -1,0 +1,108 @@
+# RPE1 cell lines vs the HMF patient SV-neoantigen catalogue.
+#
+# The concrete instance of the general analysis. Nothing in src/svneo names RPE1
+# or HMF; swap this file and the same code answers the same question for any
+# sample set against any reference catalogue.
+#
+# A worked example with every field filled in. Paths are placeholders: the real
+# configuration carries absolute paths and the filenames of access-controlled
+# inputs, and is git-ignored for that reason.
+#
+# A sample whose BAM is absent is recorded as `NA` for the affected stages rather
+# than failing, so a partially available dataset still runs.
+
+run_name: rpe1_vs_hmf_svneo
+
+# Stage-2 backend (the only pluggable stage). `neosv` is the vendored, MIT
+# licensed NeoSV plus this repo's candidate-peptide output; `precomputed` reuses
+# a stored output; `neosv_trace` needs an external checkout (resources.neosv_path).
+peptide_generator: neosv
+
+genome:
+  build: GRCh38
+  ensembl_release: 115          # both sides on Ensembl 115 -> no liftover anywhere
+
+reference:
+  name: HMF_curated_2856
+  # Curated shortlist: one row per unique peptide, carrying the patient odds
+  # ratio, SV type, gene and HLA coverage annotations.
+  peptides: /path/to/reference_catalogue.tsv
+  peptide_column: neoantigen
+  gene_column: gene1
+  svtype_column: svtype
+  # Full pool, carrying the patient breakpoint coordinates that level 3
+  # (breakpoint proximity) needs. Optional: without it level 3 is skipped.
+  pool: /path/to/reference_pool_with_coordinates.tsv
+  pool_peptide_column: neoantigen
+  # Self-peptide test. Without it `is_self` is recorded as NA, never as passing.
+  proteome: /path/to/Homo_sapiens.GRCh38.pep.all.fa.gz
+
+resources:
+  pyensembl_cache: /path/to/pyensembl_cache
+  gnomad_sv: /path/to/gnomad.v4.1.sv.sites.vcf.gz
+  # neosv_path: only needed to override the vendored copy in vendor/neosv_trace/.
+  # neosv_path: /path/to/another/NeoSV-Trace/checkout
+  # Reuse an existing NeoSV-Trace output instead of regenerating, per sample:
+  # peptides_from:
+  #   RPE1-WT: /path/to/prefix
+
+# Sensitivity branches differ ONLY in stage-1 admission, so any difference in the
+# result is attributable to admission and nothing else. `pon_max: null` disables
+# the panel filter; it applies to germline/parental VCFs only, because somatic
+# call sets arrive already panel-filtered by the caller.
+branches:
+  - name: noPON
+    pon_max: null
+  - name: PON10
+    pon_max: 10
+
+# The lineage. RPE1-WT is the parental line; the others are derived from it, so
+# the germline VCF of every derived pair IS the parental genome (86.2% of
+# breakends at identical positions between pairs). It is therefore analysed ONCE,
+# as RPE1-WT; every derived sample uses only its somatic VCF.
+samples:
+  - name: RPE1-WT
+    vcf_kind: germline
+    parent: null
+    vcf: /path/to/sv_calls/RPE1_TP53/RPE1-TP53.germline.sv.vcf.gz
+    rna_bam: /path/to/rna/RPE1-WT-RNA.md.bam
+    isofox_dir: /path/to/rna/isofox/RPE1_WT
+    isofox_prefix: RPE1-WT-RNA.isf
+    dna_bam: /path/to/dna/RPE1-WT.redux.bam
+    notes: >
+      Parental, near-diploid, hTERT-immortalised. "Germline" here means "present
+      before any engineering", not "inherited": the line carries culture drift.
+
+  - name: RPE1-TP53
+    vcf_kind: somatic
+    parent: RPE1-WT
+    vcf: /path/to/sv_calls/RPE1_TP53/RPE1-TP53.somatic.sv.vcf.gz
+    rna_bam: /path/to/rna/RPE1-TP53-RNA.md.bam
+    isofox_dir: /path/to/rna/isofox/RPE1_TP53
+    isofox_prefix: RPE1-TP53-RNA.isf
+    dna_bam: /path/to/dna/RPE1-TP53.redux.bam
+
+  - name: RPE1-TP53-BRCA1
+    vcf_kind: somatic
+    parent: RPE1-TP53
+    vcf: /path/to/sv_calls/RPE1_TP53_BRCA1/RPE1-TP53-BRCA1.somatic.sv.vcf.gz
+    rna_bam: /path/to/rna/RPE1-TP53-BRCA1-RNA.md.bam
+    isofox_dir: /path/to/rna/isofox/RPE1_TP53_BRCA1
+    isofox_prefix: RPE1-TP53-BRCA1-RNA.isf
+    dna_bam: /path/to/dna/RPE1-TP53-BRCA1.redux.bam
+
+  - name: RPE1-TP53-BRCA2
+    vcf_kind: somatic
+    parent: RPE1-TP53
+    vcf: /path/to/sv_calls/RPE1_TP53_BRCA2/RPE1-TP53-BRCA2.somatic.sv.vcf.gz
+    rna_bam: /path/to/rna/RPE1-TP53-BRCA2-RNA.md.bam
+    isofox_dir: /path/to/rna/isofox/RPE1_TP53_BRCA2
+    isofox_prefix: RPE1-TP53-BRCA2-RNA.isf
+    dna_bam: /path/to/dna/RPE1-TP53-BRCA2.redux.bam
+
+# Threshold overrides for this run. Everything not listed keeps the value in
+# src/svneo/criteria.py, and whatever is listed is echoed into every manifest.
+# criteria:
+#   STRONG_MIN_JUNCTION_READS: 5
+
+out_dir: results

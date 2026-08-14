@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+._*
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.ipynb_checkpoints/
+
+# Run outputs and references — regenerated, and too large to track
+results/
+pyensembl_cache/
+
+# Local run configurations. These carry absolute paths and the filenames of
+# access-controlled inputs; config/*.example.yaml is the version to share.
+config/*.yaml
+!config/template.yaml
+!config/*.example.yaml
