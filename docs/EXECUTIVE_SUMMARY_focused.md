@@ -79,7 +79,7 @@ anywhere in this pipeline.
 | 1 | `vcf.py` | Which SV records are admissible, and what is the real lesion size? |
 | 2 | `generators/` | What neopeptides could this sample's SVs produce? |
 | 3–5 | `cross.py` | Which catalogue peptides match, how tightly, and how many *events* is that? |
-| 6 | `confidence.py` | Is the SV call believable, and is it private to the sample? |
+| 6 | `confidence.py` | Is the SV call believable, and is the variant common in the population? |
 | 7–8 | `rna.py` | Is the locus transcribed, and do reads **cross** the junction? |
 | 9 | `synthesis.py` | What survives, and which sample explains it? |
 | — | `null_model.py` | How many matches would chance alone produce? |
@@ -119,7 +119,7 @@ yields up to ~40 overlapping sequences. And many peptides from one junction are
 | **How** | read from the VCF `FILTER` column |
 | **Threshold** | somatic: keep `FILTER ∈ {PASS}` (`SOMATIC_KEEP_FILTERS`); germline: all records pass by construction |
 | **Why** | records the caller rejected carry no usable evidence, and it made that judgement with more information than we have |
-| **Does not capture** | nothing about whether the SV is *private* — that is stage 6 |
+| **Does not capture** | nothing about how common the variant is in the population — that is stage 6 |
 
 Two rejection classes matter. `PON` means the breakpoint was seen in a panel of
 normal samples. `INFERRED` means the caller deduced the breakend from a
@@ -296,7 +296,7 @@ breakpoint. The column is there to be used in interpretation; it is not a gate.
 
 ---
 
-## Stage 6 — Confidence and privacy · `src/svneo/confidence.py`
+## Stage 6 — Confidence and population frequency · `src/svneo/confidence.py`
 
 `annotate_confidence()` L40 · `annotate_gnomad()` L129 · `annotate_privacy()` L61 · `_overlap_join()` L153
 
@@ -313,17 +313,28 @@ breakpoint. The column is there to be used in interpretation; it is not a gate.
 judgement because they depend on a purity/ploidy fit that is unreliable for
 clonal samples.
 
-### 6.2 Privacy needs two independent filters
+### 6.2 Is the shared event just shared germline variation?
 
-| Filter | Threshold | Rationale |
+This is the criterion most easily misread, so it is worth stating what it is
+**not**. The analysis is looking for peptides that recur between patients and
+cell lines: a match is the point, not a problem. What this stage asks is whether
+a given match is *informative* — because if the underlying variant is carried by
+a large fraction of the population, then patient and cell line share it for the
+same reason most people would, and the match says nothing about tumour biology.
+
+The pipeline calls the surviving property `is_private`, and the tables label the
+column **Not a common variant**. Two independent filters, and an event must
+clear both:
+
+| Filter | Threshold | What it catches |
 |---|---|---|
-| Panel of normals | `PON_MAX = 10` | recurrent site in unrelated normals |
+| Panel of normals | `PON_MAX = 10` | recurrent artefacts and breakpoints seen across unrelated normals |
 | Population frequency | `GNOMAD_MAX_AF = 0.001` on `GNOMAD_AF_FIELD = popmax` | inherited variation the panel misses |
 
-An event is private only if it clears **both**. This is not redundancy: the panel
-has false negatives for inherited variation, and the two observed cases that
-motivated it (`PON_COUNT` 1 with AF 0.287; `PON_COUNT` 3 with AF 0.263) pass the
-panel while being documented common polymorphisms.
+Both are needed. The panel has false negatives for inherited variation: the two
+observed cases that motivated the second filter (`PON_COUNT` 1 with AF 0.287,
+and `PON_COUNT` 3 with AF 0.263) pass the panel while being documented common
+polymorphisms.
 
 Matching against gnomAD-SV uses **reciprocal overlap** at
 `GNOMAD_RECIPROCAL_OVERLAP = 0.5`, the community default for SV matching.
@@ -447,21 +458,21 @@ rather than leaving 99.3% of its rows empty.
 | Gene-concordant | 376 | — | 21 | — |
 | Credible | 331 | — | 21 | — |
 | **Events** | **46** | **0** | **1** | **0** |
-| Private | 24 | — | 0 | — |
+| Not a common variant | 24 | — | 0 | — |
 | High-confidence | 15 | — | 0 | — |
 | RNA-supported | 3 | — | 0 | — |
-| **Private + HC + RNA** | **0** | — | **0** | — |
+| **All three** | **0** | — | **0** | — |
 
 ### How to read this table
 
-**Privacy here rests on population frequency alone.** The panel count is in every
-table and in the per-event listings below, but it does not remove anything, so an
-event marked private may still carry a high `PON_COUNT`. Read the two columns
-together.
+**Here this rests on population frequency alone.** The panel count is in every
+table and in the per-event listings below, but it does not remove anything, so a
+row marked *not a common variant* may still carry a high `PON_COUNT`. Read the
+two columns together.
 
 **The last two rows are different questions.** An event can be confidently called
 and transcribed while being a germline polymorphism carried by most of the
-population. `Private + HC + RNA` is the figure to quote; it is **0 everywhere**.
+population. `All three` is the figure to quote; it is **0 everywhere**.
 
 
 ---
@@ -478,7 +489,7 @@ junction-crossing reads in RNA; all 46 are listed below, strongest evidence
 first.
 
 <!-- events:RPE1-WT -->
-| Gene | Type | Size | Peptides | PON | gnomAD nfe | gnomAD amr | gnomAD max | Private | HC | RNA test | min cov | Crossing | Tier |
+| Gene | Type | Size | Peptides | PON | gnomAD nfe | gnomAD amr | gnomAD max | Not a common variant | HC | RNA test | min cov | Crossing | Tier |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | ITGA11 | DEL | 220 | 2 | 3,513 | 0.768 | 0.744 | 0.905 (afr) | **no** | yes | sizegap | 2,412 | 31 | STRONG |
 | GOLGA3 | DEL | 2 | 1 | 3 | — | — | — | yes | no | insertion | 456 | 2 | WEAK |
@@ -591,7 +602,7 @@ The only derived line with a catalogue match.
 ### The single event
 
 <!-- events:RPE1-TP53-BRCA1 -->
-| Gene | Type | Size | Peptides | PON | gnomAD nfe | gnomAD amr | gnomAD max | Private | HC | RNA test | min cov | Crossing | Tier |
+| Gene | Type | Size | Peptides | PON | gnomAD nfe | gnomAD amr | gnomAD max | Not a common variant | HC | RNA test | min cov | Crossing | Tier |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | SLC9A9 | DEL | 52 | 21 | — | 0.209 | 0.137 | 0.222 (asj) | **no** | no | sizegap | 3 | 0 | — |
 <!-- /events:RPE1-TP53-BRCA1 -->

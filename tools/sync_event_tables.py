@@ -38,7 +38,7 @@ EVENT_COLUMNS = [
     ("gene", "Gene"), ("svtype", "Type"), ("event_size", "Size"),
     ("n_peptides", "Peptides"), ("pon_count", "PON"),
     ("gnomad_af_nfe", "gnomAD nfe"), ("gnomad_af_amr", "gnomAD amr"),
-    ("gnomad_af_popmax", "gnomAD max"), ("is_private", "Private"),
+    ("gnomad_af_popmax", "gnomAD max"), ("is_private", "Not a common variant"),
     ("sv_hc", "HC"), ("test", "RNA test"), ("min cov", "min cov"),
     ("junction_reads", "Crossing"), ("rna_tier", "Tier"),
 ]
