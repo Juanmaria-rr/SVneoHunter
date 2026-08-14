@@ -253,7 +253,12 @@ def main() -> None:
                     help="print the plan and exit without computing")
     args = ap.parse_args()
 
-    cfg = config_mod.load(args.config)
+    try:
+        cfg = config_mod.load(args.config)
+    except (config_mod.ConfigError, FileNotFoundError) as error:
+        # A misconfiguration is the user's to fix, so print what is wrong and
+        # nothing else. A stack trace here only obscures the message.
+        sys.exit(f"config error in {args.config}:\n{error}")
     print(config_mod.describe(cfg))
     if cfg.criteria_overrides:
         applied = criteria.apply_overrides(cfg.criteria_overrides)

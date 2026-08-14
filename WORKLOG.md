@@ -7,6 +7,103 @@ what was tried, why, and what it showed.
 
 ---
 
+## 2026-08-14 — README audit for publication as SVneoHunter
+
+### Logic followed
+
+The repository is going public as `SVneoHunter`, so the README was audited
+against the code rather than read through: every documented command executed,
+every config key checked against the dataclasses, every documented output
+checked against a real run, every link resolved. Prose claims were checked the
+same way — a README that asserts something the code no longer does is worse than
+one that omits it, because the reader has no reason to doubt it.
+
+### Changes made
+
+**Claims that were false.**
+
+- *"Sensitivity branches differ **only** in stage-1 admission"* — untrue since
+  the panel-reporting change earlier today, which added a stage-6 lever. Replaced
+  with a section explaining that the panel reaches a candidate twice, why both
+  levers are needed, and why `pon_max: null` alone is a no-op on somatic sets.
+- *"the 12-row evidence funnel"* — it was 13, and is now 14.
+- The citation section asked readers to cite "the peptide generator it vendors
+  (NeoSV-Trace)". The repository vendors **NeoSV**; NeoSV-Trace is credited for
+  identifying the frame bug and is explicitly not redistributed. The licence
+  section said this correctly, so the two contradicted each other.
+
+**Gaps a new user would hit.**
+
+- No clone step and no repository name: the title said `svneo`, which is the
+  Python package, not the repository. Both are now stated, with the distinction
+  made explicit so `python -m svneo.run` inside `SVneoHunter/` is not surprising.
+- No repository layout. Added, with a pointer to `docs/EXECUTIVE_SUMMARY.md`,
+  which was not linked from the README at all.
+- The `resources:` block was undocumented in full. `gnomad_sv` matters most:
+  without it privacy silently degrades to the panel alone, every `gnomad_af_*`
+  column is `NA`, and `privacy_note` records why — a real loss of specificity
+  that a reader had no way to anticipate. Each key now has an "effect if absent"
+  row, plus where to download gnomAD-SV.
+- Config keys absent from the README: `isofox_prefix`, `dna_bam`, `notes`,
+  `svtype_column`, `pool`, `pool_peptide_column`, `gnomad_max_af`, the `genome:`
+  and `criteria:` blocks, and the two new branch keys. All documented; `pool` in
+  particular gates cross level 3 entirely.
+- Two tools were missing from the review table (`build_html_report.py`,
+  `build_summary_html.py`).
+- No example of what a run produces. Added a "What a run looks like" section with
+  real console output and the funnel, including the warning that the last three
+  funnel rows are overlapping sets rather than a chain.
+
+**A usability bug found by running the documented commands.**
+
+`cp config/template.yaml … && --dry-run` — the first thing anyone does — raised
+`FileNotFoundError` behind a stack trace on the first placeholder path it met.
+That reads as a broken tool rather than an unconfigured one, and revealed one bad
+path per invocation. Now a `ConfigError` reports every unreadable path at once
+with a line saying what to do, `run.py` prints the message without a traceback,
+and the exit code is 1. Pinned by a test that loads the shipped template and
+asserts more than one placeholder is named.
+
+### Changes to the code, not only the docs
+
+- `config.ConfigError`, and `load()` collecting all missing paths.
+- `run.py` catching it and exiting with the message alone.
+- `synthesis.FUNNEL_ROWS`: `events_hc_and_rna` was labelled "both — the
+  strongest set". It is not — privacy is absent from it. Relabelled, and
+  `events_private_hc_and_rna` added as the final row.
+
+### Results
+
+`results/` was regenerated from the current code so no output predates the
+thresholds that produced it. Both branches ran in one invocation, which also
+fixed the cross-sample aggregates: they are rewritten per invocation, so the
+earlier split runs had left `null_model_rates.tsv` describing only the last
+branch. It now carries all eight runs.
+
+Verified after the rewrite: every tool, doc, config key and documented output
+appears in the README; all eight relative links resolve; every table-of-contents
+anchor matches a heading; `check_docs.py` clean; both test suites pass (31 unit
+tests, 21 integration checks).
+
+Enrichment over the permutation null, all eight runs:
+
+| Run | candidates | matches | per 1,000 | null mean | enrichment |
+|---|---|---|---|---|---|
+| RPE1-WT PON10 | 20,710 | 64 | 3.09 | 1.30 | 49× |
+| RPE1-WT noPON | 63,036 | 288 | 4.57 | 2.74 | 105× |
+| RPE1-TP53-BRCA1 PON10 | 536 | 21 | 39.18 | 0.001 | — |
+| RPE1-TP53-BRCA1 noPON | 572 | 21 | 36.71 | 0.000 | — |
+
+The BRCA1 enrichment figure is not quotable: its null mean is at or below the
+resolution of 1,000 permutations, so the ratio is an artefact of dividing by
+approximately zero. The per-1,000 rate is the comparable number.
+
+### Open
+
+- Unchanged: strand skew, LILAC HLA typing, patch 001 upstream.
+- `docs/EXECUTIVE_SUMMARY.md` is being rewritten as the full method-plus-results
+  document; `tools/build_summary_html.py` renders it to a shareable page.
+
 ## 2026-08-14 — reporting the panel instead of filtering on it
 
 ### Logic followed

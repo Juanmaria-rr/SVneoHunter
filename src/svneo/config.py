@@ -157,6 +157,15 @@ class RunConfig:
         return chain
 
 
+class ConfigError(Exception):
+    """A configuration the user can fix, as opposed to a bug in the pipeline.
+
+    Raised so `run.py` can print the message alone. A traceback in front of
+    "/path/to/reference_peptides.tsv does not exist" tells the reader nothing
+    they can act on and suggests the tool is broken rather than unconfigured.
+    """
+
+
 def load(path: str) -> RunConfig:
     """Load and validate a run config. Fails loudly: a silently mis-specified
     input is far more expensive than a refused run."""
@@ -165,19 +174,32 @@ def load(path: str) -> RunConfig:
 
     for key in ("run_name", "reference", "samples"):
         if key not in raw:
-            raise ValueError(f"config is missing required key '{key}'")
+            raise ConfigError(f"config is missing required key '{key}'")
 
     reference = Reference(**raw["reference"])
     if not os.path.exists(reference.peptides):
-        raise FileNotFoundError(f"reference peptides not found: {reference.peptides}")
+        # Every missing path at once, not the first one. A new user's first
+        # action is to copy the template and run --dry-run; reporting one
+        # placeholder per invocation turns that into a guessing game.
+        missing = [f"reference.peptides: {reference.peptides}"]
+        for entry in raw.get("samples", []):
+            for key in ("vcf", "rna_bam", "dna_bam", "isofox_dir"):
+                value = entry.get(key)
+                if value and not os.path.exists(value):
+                    missing.append(f"samples[{entry.get('name', '?')}].{key}: {value}")
+        raise ConfigError(
+            "these configured paths do not exist:\n  "
+            + "\n  ".join(missing)
+            + "\n\nIf this is a freshly copied config/template.yaml, replace the "
+              "/path/to/... placeholders with real paths.")
 
     samples = [Sample(**s) for s in raw["samples"]]
     if not samples:
-        raise ValueError("config lists no samples")
+        raise ConfigError("config lists no samples")
 
     names = [s.name for s in samples]
     if len(names) != len(set(names)):
-        raise ValueError("sample names must be unique")
+        raise ConfigError("sample names must be unique")
     for sample in samples:
         if sample.vcf_kind not in ("germline", "somatic"):
             raise ValueError(f"{sample.name}: vcf_kind must be 'germline' or "

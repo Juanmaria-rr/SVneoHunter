@@ -39,7 +39,12 @@ FUNNEL_ROWS = [
     ("events_private", "PON and population-frequency clean"),
     ("events_hc", "high-confidence SV calls"),
     ("events_rna_supported", "junction-crossing reads in RNA"),
-    ("events_hc_and_rna", "both — the strongest set"),
+    # NOT the strongest set: privacy is absent from this one. Labelling it as
+    # such reported an event present in 90% of a gnomAD population as a
+    # surviving candidate, so the two are now separate rows and the last row is
+    # the one to quote.
+    ("events_hc_and_rna", "high-confidence AND transcribed (privacy NOT applied)"),
+    ("events_private_hc_and_rna", "private AND high-confidence AND transcribed"),
 ]
 
 

@@ -227,10 +227,10 @@ produced these SV calls. In RNA it is not tunable: STAR emits only 0, 1, 3 and
 
 | Operation | Function | Criteria |
 |---|---|---|
-| The fixed-row funnel | `build_funnel()` L46, `FUNNEL_ROWS` | — |
-| Earliest sample carrying each breakpoint | `attribute()` L53 | `ATTRIBUTION_MATCH_TOLERANCE` L435 |
-| Cross-sample table with per-1,000 rates | `compare_samples()` L106 | — |
-| Plain-language cautions attached to the numbers | `interpret()` L130 | — |
+| The fixed-row funnel | `build_funnel()` L51, `FUNNEL_ROWS` | — |
+| Earliest sample carrying each breakpoint | `attribute()` L58 | `ATTRIBUTION_MATCH_TOLERANCE` L435 |
+| Cross-sample table with per-1,000 rates | `compare_samples()` L111 | — |
+| Plain-language cautions attached to the numbers | `interpret()` L135 | — |
 
 ---
 

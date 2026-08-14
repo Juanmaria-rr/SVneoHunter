@@ -325,6 +325,46 @@ def test_pon_still_votes_on_privacy_unless_told_otherwise():
 
 
 # ---------------------------------------------------------------------------
+# A freshly copied template must fail with something the user can act on
+#
+# Copying config/template.yaml and running --dry-run is the first thing anyone
+# does with this repository. It used to raise FileNotFoundError on the first
+# placeholder it met, behind a stack trace — which reads as a broken tool rather
+# than an unconfigured one, and reveals one bad path per invocation.
+# ---------------------------------------------------------------------------
+
+def test_unedited_template_reports_every_placeholder_at_once():
+    import tempfile
+    from svneo import config as config_mod
+
+    template = pathlib.Path(__file__).parent.parent / "config" / "template.yaml"
+    assert template.exists(), "config/template.yaml is referenced by the README"
+
+    with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as handle:
+        handle.write(template.read_text())
+        copy = handle.name
+    try:
+        config_mod.load(copy)
+    except config_mod.ConfigError as error:
+        message = str(error)
+    except Exception as error:                                  # noqa: BLE001
+        raise AssertionError(
+            f"expected ConfigError, got {type(error).__name__}: {error}")
+    else:
+        raise AssertionError("an unedited template must not load")
+    finally:
+        os.unlink(copy)
+
+    assert "reference.peptides" in message
+    # Every bad path, not just the first: otherwise fixing the config is a
+    # one-error-per-run guessing game.
+    assert message.count("/path/to/") > 1, \
+        f"only one placeholder reported:\n{message}"
+    assert "template.yaml" in message, \
+        "the message should say what to do, not only what is wrong"
+
+
+# ---------------------------------------------------------------------------
 # The manifest must be complete
 # ---------------------------------------------------------------------------
 
