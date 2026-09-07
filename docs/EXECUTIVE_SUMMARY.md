@@ -842,6 +842,10 @@ filters. But it means locus-level overlap almost never implies peptide-level
 overlap, which is why the level-1 cross is exact sequence identity rather than
 proximity.
 
+The full derivation — every step, its population, the columns it reads, and what
+the definitions do and do not model — is in
+[`LOCUS_VS_PEPTIDE.md`](LOCUS_VS_PEPTIDE.md).
+
 Reproduce with `python tools/analyse_locus_vs_peptide.py`, from the
 `patient_evidence`, `patient_bp_dist_bp`, `insert_len`, `n_peptides_generated`
 and `n_peptides_matched` columns of `master_sv.tsv`.

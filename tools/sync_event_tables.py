@@ -34,7 +34,7 @@ import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
-DOCS = ["docs/EXECUTIVE_SUMMARY.md"]
+DOCS = ["docs/EXECUTIVE_SUMMARY.md", "docs/LOCUS_VS_PEPTIDE.md"]
 
 #: Column key in the results, and its heading in the document.
 EVENT_COLUMNS = [
@@ -130,10 +130,17 @@ def events_table(run: str) -> str:
 
 def analysis_block(name: str) -> str:
     """A generated analysis table, by name. Extend here, not in the document."""
-    if name == "locus_vs_peptide":
-        import analyse_locus_vs_peptide as analysis
-        return analysis.markdown(analysis.analyse(analysis.load("noPON")))
-    return f"*Unknown analysis block `{name}`.*"
+    import analyse_locus_vs_peptide as analysis
+    builders = {
+        "locus_vs_peptide":
+            lambda t: analysis.markdown(analysis.analyse(t)),
+        "locus_vs_peptide_steps": analysis.steps_markdown,
+        "locus_vs_peptide_per_line": analysis.per_line_markdown,
+        "locus_vs_peptide_distance": analysis.distance_markdown,
+    }
+    if name not in builders:
+        return f"*Unknown analysis block `{name}`.*"
+    return builders[name](analysis.load("noPON"))
 
 
 def sync(text: str) -> tuple[str, int]:

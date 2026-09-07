@@ -77,7 +77,8 @@ vendor/neosv/         NeoSV (MIT), vendored; one documented patch
 config/               template.yaml + a complete worked example
 tools/                reporting and verification scripts (see Reviewing a run)
 tests/                unit tests + an integration test on a synthetic fixture
-docs/                 EXECUTIVE_SUMMARY.md, PROVENANCE.md, OPEN_QUESTIONS.md
+docs/                 EXECUTIVE_SUMMARY.md, LOCUS_VS_PEPTIDE.md,
+                      PROVENANCE.md, OPEN_QUESTIONS.md
 notebooks/            an independent PySpark re-derivation of every stage
 results/              run outputs (git-ignored; regenerated, not tracked)
 ```
