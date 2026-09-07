@@ -134,6 +134,118 @@ def analyse(table: pd.DataFrame) -> dict:
     return result
 
 
+def steps(table: pd.DataFrame) -> list[dict]:
+    """The derivation, one row per step: population, operation, result.
+
+    Written as data rather than prose so the report cannot describe a step the
+    code does not take. Each entry states the SET it operates on and the COLUMNS
+    it reads, which is what makes a number checkable against the master table.
+    """
+    generated = _num(table, "n_peptides_generated").fillna(0)
+    matched = _num(table, "n_peptides_matched").fillna(0)
+    distance = _num(table, "patient_bp_dist_bp")
+    inserted = _num(table, "insert_len").fillna(0)
+    evidence = table.get("patient_evidence", pd.Series(dtype=str))
+
+    near, produces, hit = distance <= NEAR_BP, generated > 0, matched > 0
+    exact = distance == 0
+    rows = [
+        dict(step="0", population="every admitted junction, all lines",
+             operation="rows of master_sv.tsv", columns="—", n=len(table)),
+        dict(step="1", population="the same junctions",
+             operation="distance to the nearest patient breakpoint, "
+                       "min over the two breakends",
+             columns="patient_bp_dist_bp", n=int(distance.notna().sum())),
+        dict(step="2", population="the same junctions",
+             operation="assign the highest evidence level reached, by precedence",
+             columns="patient_evidence",
+             n=int(evidence.notna().sum())),
+        dict(step="3a", population="all junctions",
+             operation="reach a locus or mechanism level, but not a peptide",
+             columns="patient_evidence",
+             n=int(evidence.isin(LOCUS_LEVELS).sum())),
+        dict(step="3b", population="all junctions",
+             operation="reach an identical peptide",
+             columns="patient_evidence",
+             n=int((evidence == "identical_peptide").sum())),
+        dict(step="4", population="all junctions",
+             operation=f"restrict to within {NEAR_BP:,} bp of a patient breakpoint",
+             columns="patient_bp_dist_bp", n=int(near.sum())),
+        dict(step="5a", population="step 4",
+             operation="produce no candidate peptide — cannot match",
+             columns="n_peptides_generated", n=int((near & ~produces).sum())),
+        dict(step="5b", population="step 4",
+             operation="produce peptides, none identical to the catalogue",
+             columns="n_peptides_generated, n_peptides_matched",
+             n=int((near & produces & ~hit).sum())),
+        dict(step="5c", population="step 4",
+             operation="produce peptides and at least one matches",
+             columns="n_peptides_matched", n=int((near & produces & hit).sum())),
+        dict(step="6", population="all junctions",
+             operation="restrict to the SAME coordinate as a patient breakpoint",
+             columns="patient_bp_dist_bp", n=int(exact.sum())),
+        dict(step="7a", population="step 6",
+             operation="also the same SV type as the patient event",
+             columns="svtype, patient_svtype",
+             n=int((exact & (table.get("svtype") == table.get("patient_svtype"))).sum())),
+        dict(step="7b", population="step 6", operation="carry inserted bases",
+             columns="insert_len", n=int((exact & (inserted > 0)).sum())),
+        dict(step="8a", population="step 6", operation="produce peptides",
+             columns="n_peptides_generated", n=int((exact & produces).sum())),
+        dict(step="8b", population="step 8a", operation="share a peptide",
+             columns="n_peptides_matched", n=int((exact & produces & hit).sum())),
+    ]
+    return rows
+
+
+def steps_markdown(table: pd.DataFrame) -> str:
+    """The derivation as a table."""
+    lines = ["| Step | Population | Operation | Columns read | n |",
+             "|---|---|---|---|---|"]
+    for row in steps(table):
+        lines.append(f"| {row['step']} | {row['population']} | {row['operation']} "
+                     f"| `{row['columns']}` | **{row['n']:,}** |")
+    return "\n".join(lines)
+
+
+def per_line_markdown(table: pd.DataFrame) -> str:
+    """The evidence ladder per cell line, since the lines differ by 80-fold."""
+    if "cell_line" not in table.columns:
+        return ""
+    order = ["identical_peptide", "same_gene_and_svtype", "same_gene",
+             "breakpoint_within_1kb", "breakpoint_within_10kb",
+             "breakpoint_within_100kb", "not_seen_in_patients"]
+    cross = pd.crosstab(table["patient_evidence"], table["cell_line"])
+    lines_ = list(cross.columns)
+    out = ["| Level | " + " | ".join(lines_) + " |",
+           "|---" * (len(lines_) + 1) + "|"]
+    for level in order:
+        if level not in cross.index:
+            continue
+        out.append(f"| `{level}` | "
+                   + " | ".join(f"{cross.loc[level, c]:,}" for c in lines_) + " |")
+    out.append("| **total** | "
+               + " | ".join(f"**{int(cross[c].sum()):,}**" for c in lines_) + " |")
+    return "\n".join(out)
+
+
+def distance_markdown(table: pd.DataFrame) -> str:
+    """How the junctions distribute over distance, before any level is assigned."""
+    distance = _num(table, "patient_bp_dist_bp")
+    bands = [("0 (same coordinate)", distance == 0),
+             ("1 - 1,000", (distance >= 1) & (distance <= 1_000)),
+             ("1,001 - 10,000", (distance > 1_000) & (distance <= 10_000)),
+             ("10,001 - 100,000", (distance > 10_000) & (distance <= 100_000)),
+             ("> 100,000", distance > 100_000),
+             ("no patient breakpoint on that chromosome", distance.isna())]
+    total = max(len(table), 1)
+    lines = ["| Distance to nearest patient breakpoint | Junctions | % |",
+             "|---|---|---|"]
+    for label, mask in bands:
+        lines.append(f"| {label} | {int(mask.sum()):,} | {100*mask.sum()/total:.1f} |")
+    return "\n".join(lines)
+
+
 def markdown(result: dict) -> str:
     """The tables the executive summary embeds."""
     order = ["identical_peptide", "same_gene_and_svtype", "same_gene",
