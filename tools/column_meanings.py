@@ -114,8 +114,22 @@ MEANINGS: dict[str, str] = {
                "skew is an open question and cannot be investigated from a table "
                "that does not carry it (`docs/OPEN_QUESTIONS.md`).",
     "strand2": "Strand of `transcript_id2`.",
-    "frameshift": "Whether the fusion shifts the reading frame relative to the "
-                  "5' transcript.",
+    "frameshift": "RETIRED COLUMN NAME — present only in tables built before "
+                  "2026-09-07, and always EMPTY in them. This pipeline read "
+                  "NeoSV's frame verdict under the wrong attribute name, so "
+                  "`getattr` returned the default for every row and the column "
+                  "shipped blank without erroring. Superseded by `frame_effect`; "
+                  "if a table you hold has this column, its frame information "
+                  "was never populated. Rebuild with "
+                  "`tools/build_master_table.py`.",
+    "frame_effect": "NeoSV's verdict on the reading frame: `In-frame`, "
+                    "`Stop-gain`, `Stop-loss`, or `Start-loss`. The last is a "
+                    "RELIABILITY WARNING, not a biological class — upstream "
+                    "loses the start codon when the 5' CDS is empty or under "
+                    "three residues, falls back to the next ATG, and states "
+                    "such predictions are of low reliability. Decisive for any "
+                    "peptide that does NOT span the junction, since only an "
+                    "altered downstream frame makes such a peptide neo.",
     "junction_nt": "Nucleotide offset of the junction within the fusion "
                    "sequence: the length of everything 5' of the breakpoint, "
                    "inserted bases included.",

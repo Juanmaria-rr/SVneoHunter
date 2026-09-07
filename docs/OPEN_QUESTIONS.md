@@ -1,14 +1,80 @@
 # Open questions
 
-Findings that are real, reproducible, and **not yet explained**. Recorded here
-rather than in the limitations section because a limitation is understood and
-these are not.
+## 1. Minus-strand transcripts lose their 5' CDS on an intronic breakpoint
 
----
+**RESOLVED — root cause identified 2026-09-07. The fix is not yet applied, and
+every result in this repository was produced with the bug present.**
 
-## 1. Gene strand is skewed at three levels, in two directions
+Reproduce with `python tools/diagnose_minus_strand_cds.py` (exits 1 while the
+behaviour is present).
 
-**Status:** open · **Found:** 2026-08-14 · **Reproduce:** `tools/check_strand_bias.py`
+### The defect
+
+`neosv.fusion_utils.truncate_cds(transcript, '5', pos)` returns the coding
+sequence 5' of a breakpoint. For a **minus-strand transcript with an intronic
+breakpoint** it returns an empty sequence, `cut_length == 0`:
+
+| Breakpoint falls in | Plus strand | Minus strand |
+|---|---|---|
+| a coding exon | correct | correct |
+| an intron | correct (1,006 / 253 / 1,746 nt) | **empty, 6 of 6 genes tested** |
+
+Tested on ITGA11, TP53, BRCA1, GOLGA3, KRAS, BRAF (minus) and EGFR, PTEN,
+PIK3CA (plus). Introns are far larger than exons, so most real SV breakpoints
+land in them.
+
+### Why it happens
+
+`transcript.coding_sequence_position_ranges` is in **genomic** order, while
+`truncate_cds` treats it as transcript order — `transcript_utils.get_cds_range`
+states "from 5' to 3'" in its own docstring. The two coincide on the plus strand
+and are reversed on the minus strand. The exon-overlap branch survives this; the
+branch that handles a breakpoint outside a coding exon, which indexes through
+`get_noncds_range`, does not.
+
+### What it explains
+
+One root cause accounts for every symptom previously listed here as separate:
+
+- **84.0% of minus-strand fusions are flagged `Start-loss`** against 13.8% of
+  plus-strand ones. `Start-loss` is upstream's own low-reliability warning: the
+  start codon is gone, so it falls back to the next ATG and its comment says
+  "such prediction is of low reliability, we should annotate it and remove these
+  fusions when necessary."
+- **The fusion protein becomes the 3' partner alone**, so the junction sits at
+  residue ~0 — median `junction_aa` is 3 among catalogue-matching peptides, and
+  0 for ITGA11.
+- **No peptide can span the breakpoint.** 1 of 408 matching peptide rows spans
+  its junction where 67 would be expected from the 16.5% base rate, p = 1e-30.
+- **The strand skew appears at annotation, not at the breakends.** Measured:
+  admitted breakends of RPE1-WT are 47.6% minus (p = 0.33, background 48.6%),
+  while the candidate peptides they produce are 41.5% minus (p = 5e-4). Step 1
+  of the old plan, now executed, and it rules out "what breaks" as the cause.
+- **The catalogue leans the other way** (60.9% minus) and matched candidates
+  lean harder still (74.4%). Both sides were built with the same tool family, so
+  both carry the artefact; an intersection can be more extreme than either input
+  when the matching itself is driven by a shared signature.
+
+### What is NOT established
+
+- That the matches are artefactual. A `Start-loss` fusion can still produce a
+  genuinely novel protein — `is_self` is False for 403 of 408 matched peptides,
+  so they are not in the normal proteome. What is established is that they are
+  not junction-spanning and that their frame rests on a fallback start codon
+  upstream itself calls unreliable.
+- The exact index arithmetic at fault. The behaviour is reproducible and
+  strand-separated; the precise off-by-one has not been isolated.
+- Whether fixing it changes the headline result. It cannot be known without
+  re-running, and the headline is a negative finding that a more sensitive
+  minus-strand path could only add to.
+
+### Before this was understood
+
+The three-way skew below was recorded as an unexplained observation, with
+"pyensembl returns exons 5'->3'" listed as ruled out. That was verified on
+`transcript.exons` — but `coding_sequence_position_ranges`, which is what
+`truncate_cds` actually reads, is genomic-ordered. The exclusion was drawn from
+the wrong accessor.
 
 ### The observation
 

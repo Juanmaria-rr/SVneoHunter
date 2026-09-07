@@ -123,7 +123,7 @@ def spans_junction(aa_sequence: str, peptide: str, junction_aa: int | None) -> b
 #: Column order of the emitted table. Matches the contract in base.py.
 PEPTIDE_COLUMNS = ["prefix", "sv_id", "chrom1", "pos1", "gene1", "transcript_id1",
                    "strand1", "chrom2", "pos2", "gene2", "transcript_id2", "strand2",
-                   "svtype", "frameshift", "junction_nt", "junction_aa",
+                   "svtype", "frame_effect", "junction_nt", "junction_aa",
                    "spans_junction", "neopeptide", "pep_length"]
 
 
@@ -157,7 +157,11 @@ def write_all_neopeptides(path: str, fusions: list, sv_id_map: dict,
                 "transcript_id2": _attr(fusion, "cc_2", "transcript_id"),
                 "strand2": _attr(fusion, "cc_2", "strand"),
                 "svtype": getattr(sv, "svtype", "") or _svtype_from_pattern(sv),
-                "frameshift": getattr(fusion, "frameshift", ""),
+                # NeoSV names this `frame_effect`, not `frameshift`. Reading
+                # the wrong name returned "" for all 72,351 rows without
+                # erroring, so the column existed and was always empty — and
+                # the one thing it reports is the reliability warning below.
+                "frame_effect": _frame_effect(fusion),
                 "junction_nt": junction_nt, "junction_aa": junction_aa,
             }
             for peptide in fusion.neoepitopes:
@@ -197,6 +201,28 @@ def write_annotation(path: str, fusions: list, sv_id_map: dict, prefix: str) -> 
 
 
 # -- small helpers ---------------------------------------------------------
+
+def _frame_effect(fusion) -> str:
+    """NeoSV's own verdict on what the fusion does to the reading frame.
+
+    `In-frame`, `Stop-gain`, `Stop-loss`, or `Start-loss`. The last is a
+    RELIABILITY WARNING, not a biological category: upstream's own comment says
+    that when the 5' CDS is empty or under three residues the start codon is
+    lost, the tool falls back to the next ATG it finds, and "such prediction is
+    of low reliability, we should annotate it and remove these fusions when
+    necessary."
+
+    This pipeline read the attribute as `frameshift`, which does not exist, so
+    `getattr` returned the default for every row: the column shipped empty and
+    the warning never reached anyone. Peptides that do not span the junction are
+    only credible as neoantigens if the frame downstream is genuinely altered,
+    and this is the field that says so.
+    """
+    try:
+        return str(fusion.frame_effect)
+    except Exception:                       # noqa: BLE001 - upstream may raise
+        return ""
+
 
 def _attr(fusion, side: str, name: str):
     """Read an attribute of one coding-collection side, tolerating absence."""

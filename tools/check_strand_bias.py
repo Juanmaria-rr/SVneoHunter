@@ -71,6 +71,38 @@ def backgrounds(index: dict) -> tuple[float, float]:
     return by_count, by_length
 
 
+def genes_at_breakends(junctions: pd.DataFrame, release: int) -> list:
+    """Genes hit by the admitted breakends, looked up directly from coordinates.
+
+    THE POINT OF THIS FUNCTION. Every other set here is measured downstream of
+    peptide generation, so a skew in them could come from what breaks OR from
+    how the break is annotated into a fusion. This one asks only "which genes
+    does the caller's breakpoint fall in", using pyensembl on the raw
+    coordinates and touching no fusion logic at all.
+
+    If the skew is already here, the cause is upstream of annotation entirely
+    and every hypothesis about 5'/3' side selection is dead. If it is NOT here
+    but appears later, the cause is in the annotation. This is step 1 of the
+    plan in docs/OPEN_QUESTIONS.md, and the single most informative measurement
+    available.
+    """
+    from pyensembl import EnsemblRelease
+    genome = EnsemblRelease(release)
+    hits = []
+    for _, row in junctions.iterrows():
+        for chrom, pos in (("chrom1", "pos1"), ("chrom2", "pos2")):
+            c, p = row.get(chrom), row.get(pos)
+            if pd.isna(c) or pd.isna(p):
+                continue
+            try:
+                found = genome.genes_at_locus(str(c).replace("chr", ""), int(p))
+            except Exception:                       # noqa: BLE001
+                continue
+            hits.extend(g.gene_name for g in found
+                        if g.biotype == "protein_coding" and g.gene_name)
+    return hits
+
+
 def test_set(label: str, genes, index: dict, p_null: float) -> dict:
     """Binomial test of one gene set's strand composition against the background."""
     from scipy import stats
@@ -100,6 +132,11 @@ def main() -> None:
                     help="reference catalogue TSV; defaults to the configured one")
     ap.add_argument("--release", type=int, default=115)
     ap.add_argument("--out", default=None)
+    ap.add_argument("--breakends", action="store_true",
+                    help="also test the ADMITTED BREAKENDS, looked up from "
+                         "coordinates with no fusion annotation involved. Slow "
+                         "(a pyensembl locus query per breakend) and the most "
+                         "informative set in the report.")
     args = ap.parse_args()
 
     repo = pathlib.Path(__file__).resolve().parent.parent
@@ -133,14 +170,36 @@ def main() -> None:
             genes = pd.concat([table.get("gene1"), table.get("gene2")]).dropna()
             rows.append(test_set(f"candidates: {run_dir.name}", genes, index, by_length))
 
-    master = results / "master_table.tsv"
-    if master.exists():
+    # Step 1 of the plan: the admitted call set, before any peptide exists.
+    for run_dir in sorted(p for p in results.iterdir() if p.is_dir()):
+        junctions = run_dir / "stage1_junctions.tsv"
+        if not junctions.exists() or not args.breakends:
+            continue
+        table = pd.read_csv(junctions, sep="\t", low_memory=False)
+        rows.append(test_set(f"admitted breakends: {run_dir.name}",
+                             genes_at_breakends(table, args.release),
+                             index, by_length))
+
+    # A renamed input must not vanish silently. `master_table.tsv` became
+    # `master_peptides.tsv`, and the old `if exists()` simply stopped emitting
+    # the matched-candidates row — leaving a stale figure in circulation.
+    master = next((results / n for n in ("master_peptides.tsv",
+                                         "master_peptides_noPON.tsv")
+                   if (results / n).exists()), None)
+    if master is None:
+        print("\nWARNING: no master_peptides table found in "
+              f"{results}. The matched-candidate rows are NOT in this report; "
+              "run tools/build_master_table.py first.")
+    else:
         table = pd.read_csv(master, sep="\t", low_memory=False)
-        rows.append(test_set("matched candidates", table.get("ref_gene"), index, by_length))
+        gene_col = "ref_gene" if "ref_gene" in table.columns else "gene1"
+        rows.append(test_set(f"matched candidates ({master.name})",
+                             table.get(gene_col), index, by_length))
         supported = table[table.rna_tier.isin(["STRONG", "SUGGESTIVE", "WEAK"])] \
             if "rna_tier" in table.columns else table.iloc[0:0]
         if len(supported):
-            rows.append(test_set("RNA-supported events", supported.ref_gene, index, by_length))
+            rows.append(test_set("RNA-supported events",
+                                 supported[gene_col], index, by_length))
 
     report = pd.DataFrame(rows)
     print(report.to_string(index=False))

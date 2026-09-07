@@ -28,7 +28,7 @@ returns two tables:
     gene1            gene at breakend 1             -> gene concordance
     transcript_id1   transcript at breakend 1       -> isoform-level expression
   Recommended: chrom1, pos1, chrom2, pos2, gene2, transcript_id2, svtype,
-    frameshift, pep_length.
+    frame_effect, pep_length.
 
 `annotation`  one row per annotated SV. Required: sv_id, chrom1, pos1, gene1,
     transcript_id1, chrom2, pos2, gene2, transcript_id2, svtype.
@@ -52,7 +52,7 @@ REQUIRED_PEPTIDE_COLUMNS = ("sv_id", "neopeptide", "gene1", "transcript_id1")
 REQUIRED_ANNOTATION_COLUMNS = ("sv_id", "chrom1", "pos1", "gene1", "chrom2", "pos2")
 
 #: Optional but used when present; their absence degrades a feature, not the run.
-OPTIONAL_PEPTIDE_COLUMNS = ("spans_junction", "svtype", "frameshift", "pep_length",
+OPTIONAL_PEPTIDE_COLUMNS = ("spans_junction", "svtype", "frame_effect", "pep_length",
                             "gene2", "transcript_id2", "chrom1", "pos1",
                             "chrom2", "pos2")
 
