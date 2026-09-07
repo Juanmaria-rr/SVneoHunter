@@ -7,6 +7,85 @@ what was tried, why, and what it showed.
 
 ---
 
+## 2026-09-07 — the strand skew is a bug in the vendored generator
+
+### Logic followed
+
+Three items from the improvement list were meant to be separate investigations:
+fill the empty `frameshift` column, test the strand skew on admitted breakends,
+and round-trip a minus-strand fusion by hand. They turned out to be one finding.
+
+The trigger was a question asked while reviewing the report — *how can junctions
+match while the peptides differ?* — which led to checking whether the matched
+peptides actually cross the breakpoint. They do not: 1 of 408, where the 16.5%
+base rate predicts 67 (p = 1e-30).
+
+### What was found, in order
+
+**Step 1 — the skew is not in what breaks.** `check_strand_bias.py` gained
+`--breakends`, which looks genes up from the admitted breakend coordinates using
+pyensembl directly, touching no fusion logic. RPE1-WT's admitted breakends are
+47.6% minus (p = 0.33) against a 48.6% length-weighted background; the candidate
+peptides they produce are 41.5% (p = 5e-4). The deviation is introduced at
+annotation. This was step 1 of the plan recorded in OPEN_QUESTIONS.md and it
+eliminated the leading hypothesis.
+
+**Step 2 — the frame column had never been populated.** The pipeline read
+NeoSV's verdict as `frameshift`; upstream calls it `frame_effect`. `getattr`
+returned the default for all 72,351 rows, so the column shipped empty and never
+errored. With it populated: **84.0% of minus-strand fusions are `Start-loss`
+against 13.8% of plus-strand ones.** `Start-loss` is upstream's own reliability
+warning, not a biological class.
+
+**Step 3 — the defect.** `truncate_cds(transcript, '5', pos)` returns an empty
+5' coding sequence for a minus-strand transcript when the breakpoint falls in an
+intron. Six of six minus-strand genes fail; three of three plus-strand genes
+pass; both strands are correct for exonic breakpoints.
+
+The cause: coding exon ranges arrive sorted by coordinate, which is reading order
+only on the plus strand. `get_noncds_range` has a minus-strand branch that
+reverses its arithmetic — but that branch assumes the list already arrives
+reversed. Correcting data that was never reversed produces gap intervals with
+`start > end`, which can never match, and a first interval that swallows the
+whole gene (7,662,015-7,676,594 on TP53: 14.5 kb of a 14.8 kb transcript). An
+intronic breakpoint therefore resolves to gap index 0, meaning "before the first
+exon", so zero exons are kept and the 5' piece is empty.
+
+### Why it survived this long
+
+It fails silently — an inverted range raises nothing. It fails only on introns,
+so a test built from exonic breakpoints passes; the first probe written here did
+exactly that and reported "correct" before being redone. And the docstring of
+`get_cds_range` asserts the very invariant that is violated, which is also why
+an earlier entry in OPEN_QUESTIONS.md recorded exon ordering as *ruled out* —
+that check was run against `transcript.exons`, not the accessor this code path
+reads.
+
+### Changes made
+
+- `tools/diagnose_minus_strand_cds.py` — reproduces the defect, exits 1 while
+  present.
+- `tools/check_strand_bias.py` — `--breakends`; and it silently stopped emitting
+  the matched-candidate row when `master_table.tsv` was renamed, leaving a stale
+  figure in circulation. It now warns instead of skipping.
+- `_neosv_extensions.py` — reads `frame_effect`; the retired `frameshift` name is
+  documented as always-empty for anyone holding an older table.
+- `docs/OPEN_QUESTIONS.md` — question 1 rewritten: root cause, plain-language
+  mechanism with a worked three-exon example, the evidence, and the proposed fix.
+- README and executive summary no longer describe the skew as unexplained.
+
+### Not done, deliberately
+
+**The fix.** Every figure in the repository was produced with the defect present,
+so applying it changes published numbers — a decision about results, not a
+refactor. `results/RPE1-WT_noPON/` was regenerated on 2026-09-07 to measure
+`frame_effect`; the other seven runs are from 2026-08-14, so `results/` is in a
+mixed state until that decision is taken.
+
+Recommended: patch and run BOTH versions, so the impact of the defect is
+measured rather than merely corrected — which is also the evidence upstream
+would need.
+
 ## 2026-08-14 — quantifying locus-level vs peptide-level recurrence
 
 ### Logic followed

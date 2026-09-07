@@ -528,11 +528,17 @@ Full derivation, including which observation set each threshold, is in
   clonal samples.
 - **No liftover is performed.** The reference catalogue and every sample VCF must
   be on the same genome build and annotation release.
-- **An unexplained strand skew.** Candidate genes deviate significantly from a
-  length-weighted background at three levels of the analysis, in two directions.
-  The 5′/3′ assignment has been verified strand-aware, so the cause is elsewhere
-  and unidentified. No result here should be read as strand-controlled until it
-  is resolved — see [`docs/OPEN_QUESTIONS.md`](docs/OPEN_QUESTIONS.md).
+- **A known defect in the vendored generator, not yet fixed.** For a
+  minus-strand transcript whose breakpoint falls in an **intron** — most real
+  breakpoints — the 5' coding segment is returned empty. The fusion becomes the
+  3' partner alone, is flagged `Start-loss`, places the junction at residue ~0,
+  and can never yield a junction-spanning peptide. Measured here: 84.0% of
+  minus-strand fusions are `Start-loss` against 13.8% of plus-strand ones, and 1
+  of 408 catalogue-matching peptides spans its junction where 67 would be
+  expected. **Every figure in this repository was produced with this defect
+  present.** Root cause, evidence and the proposed fix are in
+  [`docs/OPEN_QUESTIONS.md`](docs/OPEN_QUESTIONS.md); reproduce with
+  `python tools/diagnose_minus_strand_cds.py`.
 
 ## Reproducing results
 

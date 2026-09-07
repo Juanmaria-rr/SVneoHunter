@@ -745,7 +745,8 @@ and `n_peptides_matched` columns of `master_sv.tsv`.
 - **Single breakends** — dropped at admission, since a junction peptide needs two
   coordinates.
 - **Whether a negative RNA result means the lesion is absent.** It does not.
-- **Anything strand-controlled** — an unexplained strand skew is unresolved
+- **Anything strand-controlled.** A defect in the vendored generator empties the
+  5′ coding segment of minus-strand transcripts when the breakpoint is intronic
   ([`OPEN_QUESTIONS.md`](OPEN_QUESTIONS.md)).
 - **Absolute panel counts as frequencies.** `PON_COUNT` is a count, and means
   nothing without the panel size; `pon_fraction` is reported beside it.

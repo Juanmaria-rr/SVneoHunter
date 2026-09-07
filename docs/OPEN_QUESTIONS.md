@@ -23,14 +23,102 @@ Tested on ITGA11, TP53, BRCA1, GOLGA3, KRAS, BRAF (minus) and EGFR, PTEN,
 PIK3CA (plus). Introns are far larger than exons, so most real SV breakpoints
 land in them.
 
-### Why it happens
+### The mechanism, in plain terms
 
-`transcript.coding_sequence_position_ranges` is in **genomic** order, while
-`truncate_cds` treats it as transcript order — `transcript_utils.get_cds_range`
-states "from 5' to 3'" in its own docstring. The two coincide on the plus strand
-and are reversed on the minus strand. The exon-overlap branch survives this; the
-branch that handles a breakpoint outside a coding exon, which indexes through
-`get_noncds_range`, does not.
+Two facts set it up.
+
+**DNA coordinates always count left to right.** A plus-strand gene is *read* in
+that direction too. A minus-strand gene is read the other way, right to left, so
+**the beginning of a minus-strand gene sits at the highest coordinate**.
+
+**The annotation library hands over coding exons sorted by coordinate**, always.
+For a plus-strand gene that order is also the reading order. For a minus-strand
+gene it is the reverse of the reading order.
+
+Take a gene with three coding exons:
+
+```
+coordinate:  100───200   300───400   500───600
+exon:          [A]         [B]         [C]
+                    gap         gap
+```
+
+Read on the plus strand: A, B, C — it starts at A.
+Read on the minus strand: C, B, A — it starts at **C**.
+
+Either way the library returns `[A, B, C]`.
+
+**What the code needs.** When a breakpoint lands in an intron, the tool must know
+how many exons precede it in *reading* order, so it can keep that leading piece
+of the protein. To find out, it first builds the list of gaps: the stretch before
+the first exon, then each intron.
+
+**What it does instead.** `get_noncds_range` knows minus-strand genes are read
+backwards, so it has a separate branch that reverses the subtractions. But that
+branch assumes the exon list already arrives in reading order, `[C, B, A]`. It
+arrives as `[A, B, C]`. The correction is applied to data that was never
+reversed, and the gaps come out like this:
+
+| Gap | Should be | Comes out as |
+|---|---|---|
+| before the first exon | above 600 | **201 → 600** |
+| intron 1 | 401 → 499 | **401 → 99** |
+| intron 2 | 201 → 299 | **601 → 299** |
+
+Two things break at once. **Every intron is inverted** — "401 to 99" is not a
+range, so no position can ever fall inside it. And **the first gap swallows most
+of the gene**: it is measured from the end of the first exon *in the list* (A)
+rather than the first in reading order (C), so instead of sitting above 600 it
+collapses leftwards to cover exons B and C and both introns.
+
+```
+      50 .... 100---200 .... 300---400 .... 500---600 .... 650
+              [  A  ]        [  B  ]        [  C  ]
+                     |________ gap 0: 201 - 650 __________|
+       outside
+```
+
+Exon A itself falls just outside, by one base, since the gap starts at its end
+plus one. That changes nothing about the outcome — and a breakpoint inside A
+would take the exonic branch, which is correct on both strands.
+
+**The consequence.** A breakpoint at position 450 is tested against the gaps.
+The introns cannot match, being inverted, so it matches the first gap — the one
+that ate the gene. The tool concludes the breakpoint lies *before the first
+exon*, and therefore that **zero exons precede it**. The leading piece of the
+protein comes out empty.
+
+Verified on the real TP53 transcript: the first gap is reported as
+7,662,015–7,676,594, which is **14.5 kb of a 14.8 kb transcript**, and all seven
+introns come back inverted.
+
+### Why the plus strand escapes
+
+There, coordinate order and reading order are the same, and the plus branch
+reverses nothing. EGFR with an intronic breakpoint correctly resolves to gap
+index 2, keeping two exons.
+
+### Why it went unnoticed for so long
+
+- **It fails silently.** An inverted range raises nothing; it simply never
+  matches.
+- **It only fails on introns.** A breakpoint inside a coding exon takes a
+  different branch that is correct on both strands, so a test built from exonic
+  breakpoints passes cleanly. The first probe written for this investigation did
+  exactly that and reported "correct" before being redone.
+- **Introns are most of a gene**, so in real data almost every breakpoint takes
+  the broken path.
+- **The docstring asserts the invariant that is violated.** `get_cds_range` is
+  documented as returning ranges "from 5' to 3'", which is true only on the plus
+  strand and is never checked.
+
+### The likely fix
+
+Sort the coding ranges into reading order — descending coordinate for
+minus-strand transcripts — before the gaps are built, restoring the invariant the
+docstring already claims. One line, but it must be verified against
+`tools/diagnose_minus_strand_cds.py` **and** against the exonic branch, which is
+correct today and must stay correct.
 
 ### What it explains
 

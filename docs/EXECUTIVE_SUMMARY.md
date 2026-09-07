@@ -865,12 +865,14 @@ and `n_peptides_matched` columns of `master_sv.tsv`.
 - **Whether a negative RNA result means the lesion is absent.** It does not. <!-- focused:drop -->The
   gene may not be expressed in that sample, and nonsense-mediated decay of an
   aberrant transcript is a real possibility.<!-- /focused:drop -->
-- **Anything strand-controlled** — an unexplained strand skew is unresolved
-  ([`OPEN_QUESTIONS.md`](OPEN_QUESTIONS.md)). <!-- focused:drop -->The catalogue is 61.0% minus-strand
-  (n = 379, p = 1.6 × 10⁻⁶ against a length-weighted background) while RPE1-WT's
-  candidates are 43.7% (n = 174). The 5′/3′ assignment has been verified
-  strand-aware — pyensembl returns exons 5′→3′, confirmed on four minus-strand
-  genes — so the cause is elsewhere and unidentified.<!-- /focused:drop -->
+- **Anything strand-controlled.** A defect in the vendored generator empties the
+  5′ coding segment of minus-strand transcripts when the breakpoint is intronic
+  ([`OPEN_QUESTIONS.md`](OPEN_QUESTIONS.md)). <!-- focused:drop -->It is why 84.0% of minus-strand
+  fusions are flagged `Start-loss` against 13.8% of plus-strand ones, why the
+  junction sits at residue ~0, and why 1 of 408 matching peptides spans its
+  junction where 67 were expected. Every figure here was produced with the
+  defect present; it is documented rather than fixed because re-running changes
+  the reported numbers and that is a decision, not a refactor.<!-- /focused:drop -->
 - **Absolute panel counts as frequencies.** `PON_COUNT` is a count, and means
   nothing without the panel size; `pon_fraction` is reported beside it.
 - **Comparability of match rates between samples** whose candidate universes
