@@ -8,8 +8,12 @@ __pycache__/
 *.egg-info/
 .ipynb_checkpoints/
 
-# Run outputs and references — regenerated, and too large to track
+# Run outputs and references — regenerated, and too large to track.
+# The glob matters: outputs are also written to sibling directories when a run
+# must not overwrite an earlier one (e.g. results_patch002/), and those carry
+# the same access-controlled, patient-derived data.
 results/
+results_*/
 pyensembl_cache/
 
 # Local run configurations. These carry absolute paths and the filenames of
