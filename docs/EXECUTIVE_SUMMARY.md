@@ -868,10 +868,15 @@ and `n_peptides_matched` columns of `master_sv.tsv`.
 - **Whether a negative RNA result means the lesion is absent.** It does not. <!-- focused:drop -->The
   gene may not be expressed in that sample, and nonsense-mediated decay of an
   aberrant transcript is a real possibility.<!-- /focused:drop -->
-- **Anything strand-controlled.** A defect in the vendored generator returns the
-  wrong 5′ coding segment for minus-strand transcripts in every region tested —
-  empty for intronic breakpoints, the wrong length for exonic ones
-  ([`OPEN_QUESTIONS.md`](OPEN_QUESTIONS.md)). <!-- focused:drop -->It is why 84.0% of minus-strand
+- **Anything strand-controlled.** A defect in the vendored generator returned the
+  wrong 5′ coding segment for minus-strand transcripts in every region tested.
+  Fixed by patch 002 ([`OPEN_QUESTIONS.md`](OPEN_QUESTIONS.md)).
+- **How much recurrence there really is.** The **reference catalogue was built
+  with the same unpatched tool** — its source shows 79.2% `Start-loss` on the
+  minus strand against 13.0% on the plus, the same signature this pipeline had.
+  A genuine minus-strand neoantigen is therefore not in the catalogue under its
+  true sequence, so a corrected candidate cannot match it. **Every match count
+  here is a floor**; rebuilding the catalogue can only raise it. <!-- focused:drop -->It is why 84.0% of minus-strand
   fusions are flagged `Start-loss` against 13.8% of plus-strand ones, why the
   junction sits at residue ~0, and why 1 of 408 matching peptides spans its
   junction where 67 were expected. Every figure here was produced with the

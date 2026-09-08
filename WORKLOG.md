@@ -7,6 +7,78 @@ what was tried, why, and what it showed.
 
 ---
 
+## 2026-09-08 — the patient catalogue carries the same defect
+
+### Logic followed
+
+Throughout the previous entries the phrase "the catalogue was built with the same
+tool family" appears as an explanation for why correcting patch 002 removed
+matches. It was an inference, never checked. A direct question forced the check,
+and it turned out to be verifiable exactly.
+
+### What was established
+
+The catalogue (`HMF_curated_2856`) is **fully contained** in
+`hmf_ensembl_115_pyensembl_2.10.1.neoantigen_ranking.tsv` — 2,856 of 2,856, drawn
+from 235,523 unique peptides across up to 245 patients. The filename records the
+versions, Ensembl 115 and pyensembl 2.10.1, the pair this pipeline uses.
+
+That file keeps NeoSV's own `frameshift` column, which gives a direct test:
+
+| 5' strand | catalogue source | this repository, before patch 002 |
+|---|---|---|
+| `+` | 13.0% `Start-loss` | 13.8% |
+| `-` | **79.2%** | **84.0%** |
+
+The same defect at the same rate. The patient side was generated with an
+unpatched NeoSV, and this is now evidence rather than inference.
+
+### Why it changes the reading of the results
+
+Patch 002 corrected one side of a two-sided comparison, which is not a safe
+state. The consequence that matters:
+
+**A genuine minus-strand neoantigen is not in the catalogue under its true
+sequence.** With the catalogue built from a broken minus-strand path, a corrected
+candidate cannot match it — not because the recurrence is absent but because the
+index being searched holds the wrong entry. Roughly half the genome is affected.
+
+**So 130 is a floor, not a ceiling.** Correcting the patient side can only add
+candidates that are currently unfindable. **Matches may increase after the
+catalogue is rebuilt.** Every statement that recurrence is low now carries this
+caveat, and it has been propagated to the executive summary, the strand
+comparison and OPEN_QUESTIONS.
+
+It also gives a falsifiable prediction. Matched peptides still almost never span
+their junction (1 of 161, against 18.2% across the universe) and patch 002 did
+not change that. If the catalogue is the remaining cause, rebuilding it should
+raise the fraction towards the universe rate. If it does not, a second unrelated
+cause is at work.
+
+### Feasibility, checked
+
+The inputs are present: **6,378 `*.purple.sv.vcf` in `hmf/hg38_SVs/`**, 329 MB.
+Regenerating the peptide layer uses the pipeline already in place.
+
+The obstacle is the curation, not the peptides. The 2,856-peptide shortlist
+carries columns from an immune-selection analysis — `or_clean`,
+`confirmed_ge1`/`ge5`, `is_cfs`, `hla_pres_cov_*` — produced by the originating
+group. Regenerating sequences is straightforward; reproducing that curation is
+not, and without it each match loses its context.
+
+Two things still need confirming from outside this repository: whether those
+6,378 VCFs are exactly the cohort behind the catalogue, and whether the curation
+is documented anywhere.
+
+### Recorded as OPEN_QUESTIONS question 2
+
+With the proposed next step: run the patched pipeline over the patient VCFs into
+its own directory, build the equivalent ranking, and compare against the existing
+one stratified by strand — how many of the 2,856 survive, change sequence, or
+appear that were absent. Only then re-cross against the cell lines. Compare
+rather than replace, as with patch 002, since that comparison is what the
+originating group would need before anything of theirs is rebuilt.
+
 ## 2026-09-08 — phase 2: the patched run, measured against the old one
 
 ### Logic followed

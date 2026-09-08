@@ -234,6 +234,100 @@ The three-way skew below was recorded as an unexplained observation, with
 `truncate_cds` actually reads, is genomic-ordered. The exclusion was drawn from
 the wrong accessor.
 
+---
+
+## 2. The reference catalogue carries the same defect, and has not been rebuilt
+
+**OPEN, and the most consequential outstanding item.** Patch 002 corrected one
+side of a two-sided comparison. Until the other side is corrected, neither the
+matches kept nor the matches lost can be interpreted with confidence.
+
+### Established, not assumed
+
+The catalogue used here (`HMF_curated_2856`, 2,856 peptides) is **fully
+contained** in `hmf_ensembl_115_pyensembl_2.10.1.neoantigen_ranking.tsv` — 2,856
+of 2,856, drawn from 235,523 unique peptides across up to 245 patients. The
+filename records the versions: Ensembl 115 and pyensembl 2.10.1, the same pair
+this pipeline uses.
+
+That file retains NeoSV's own `frameshift` column, and it shows this
+repository's pre-patch signature almost exactly:
+
+| 5' strand | `Start-loss` in the catalogue source | `Start-loss` here, before patch 002 |
+|---|---|---|
+| `+` | 13.0% | 13.8% |
+| `-` | **79.2%** | **84.0%** |
+
+Not similar — the same defect at the same rate. The patient side was generated
+with an unpatched NeoSV.
+
+### Why an asymmetric correction is not a safe state
+
+**Surviving matches remain uninterpretable.** Some of the 130 that survived patch
+002 may still match on residual shared signature, since the catalogue still
+contains defect-derived sequences.
+
+**Genuine minus-strand recurrence is invisible, and matches may INCREASE.** This
+is the half that matters. With the catalogue built from a broken minus-strand
+path, a real minus-strand neoantigen is **not in the list under its true
+sequence**. A corrected peptide cannot match it — not because the recurrence is
+absent, but because the index being searched holds the wrong entry. Roughly half
+the genome is affected.
+
+**The current figure of 130 is a floor, not a ceiling.** Correcting the patient
+side can only add candidates that were previously unfindable. Any statement that
+recurrence is low must carry this caveat until the catalogue is rebuilt.
+
+### A falsifiable prediction
+
+Matched peptides still almost never span their junction — 1 of 161 (0.6%)
+against 18.2% across the candidate universe, a depletion patch 002 did not touch
+(see [`LOCUS_VS_PEPTIDE.md`](LOCUS_VS_PEPTIDE.md)).
+
+If the reasoning above is right, **rebuilding the catalogue with the patched tool
+should raise that fraction towards the universe rate**. If it does not, a second
+and unrelated cause is at work.
+
+### Feasibility
+
+The inputs are present: **6,378 `*.purple.sv.vcf` files in `hmf/hg38_SVs/`**,
+329 MB, alongside this repository. Regenerating the peptide layer uses the
+pipeline already in place, and the pyensembl cache is built.
+
+**The obstacle is the curation, not the peptides.** The 2,856-peptide catalogue
+is a curated shortlist of those 297,739 candidates, carrying columns from an
+immune-selection analysis — `or_clean`, `confirmed_ge1`/`ge5`, `is_cfs`,
+`hla_pres_cov_*` — produced by the group that built it. Regenerating sequences is
+straightforward; reproducing the curation is not, and without it the context
+those columns give each match is lost.
+
+Two facts need confirming from outside this repository: whether those 6,378 VCFs
+are exactly the cohort that produced the catalogue, and whether the curation is
+documented anywhere.
+
+### Proposed next step
+
+Regenerate the peptide layer only, and **compare rather than replace** — the
+approach that worked for patch 002:
+
+1. Run the patched pipeline over the 6,378 patient VCFs into its own directory
+2. Build the equivalent ranking table
+3. Compare against `hmf_ensembl_115_pyensembl_2.10.1.neoantigen_ranking.tsv`,
+   stratified by strand: how many of the 2,856 survive, how many change sequence,
+   how many appear that were absent before
+4. Only then re-cross against the cell lines, and see whether matches rise
+
+Step 3 alone quantifies how far the defect reached into the patient side, which
+is what the originating group would need before anything of theirs is rebuilt.
+
+---
+
+## 3. The original strand observation, kept for the record
+
+Superseded by question 1, which explains it. Retained because the reasoning that
+led there — including an exclusion drawn from the wrong accessor — is part of how
+the defect was found.
+
 ### The observation
 
 Coding genes are split almost evenly between strands — 49.2% on minus by gene

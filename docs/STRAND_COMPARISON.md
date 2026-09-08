@@ -80,10 +80,16 @@ sensitivity would look like — a real signal would not respect strand
 configuration so precisely.
 
 **Does not establish** that the 130 surviving matches are genuine.
-They are simply no longer explained by *this* defect. Matched peptides still
-almost never span their junction, which this patch did not change, and the
-reference catalogue still carries a strand skew that cannot be corrected from
-here. Both point to the catalogue retaining the artefact.
+They are simply no longer explained by *this* defect.
+
+**And 130 is a floor, not a ceiling.** The patient catalogue was
+built with the same unpatched tool — verified, not assumed: its source file shows
+79.2% `Start-loss` on the minus strand against 13.0% on the plus, this
+repository's own pre-patch signature. So a genuine minus-strand neoantigen is
+**not in the catalogue under its true sequence**, and a corrected peptide cannot
+match it. Those recurrences are currently unfindable, and **rebuilding the
+catalogue can only add them**. Until that happens, any statement that recurrence
+is low carries this caveat. See `docs/OPEN_QUESTIONS.md` question 2.
 
 **Does not change the headline.** No candidate satisfied every criterion before
 the patch, and none does after.

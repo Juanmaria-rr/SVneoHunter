@@ -748,10 +748,15 @@ and `n_peptides_matched` columns of `master_sv.tsv`.
 - **Single breakends** — dropped at admission, since a junction peptide needs two
   coordinates.
 - **Whether a negative RNA result means the lesion is absent.** It does not.
-- **Anything strand-controlled.** A defect in the vendored generator returns the
-  wrong 5′ coding segment for minus-strand transcripts in every region tested —
-  empty for intronic breakpoints, the wrong length for exonic ones
-  ([`OPEN_QUESTIONS.md`](OPEN_QUESTIONS.md)).
+- **Anything strand-controlled.** A defect in the vendored generator returned the
+  wrong 5′ coding segment for minus-strand transcripts in every region tested.
+  Fixed by patch 002 ([`OPEN_QUESTIONS.md`](OPEN_QUESTIONS.md)).
+- **How much recurrence there really is.** The **reference catalogue was built
+  with the same unpatched tool** — its source shows 79.2% `Start-loss` on the
+  minus strand against 13.0% on the plus, the same signature this pipeline had.
+  A genuine minus-strand neoantigen is therefore not in the catalogue under its
+  true sequence, so a corrected candidate cannot match it. **Every match count
+  here is a floor**; rebuilding the catalogue can only raise it.
 - **Absolute panel counts as frequencies.** `PON_COUNT` is a count, and means
   nothing without the panel size; `pon_fraction` is reported beside it.
 - **Comparability of match rates between samples** whose candidate universes
