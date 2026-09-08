@@ -29,9 +29,20 @@ recomputed here, and this tool does not pretend to.
 Nothing is overwritten: output goes to its own directory, one file per patient,
 and existing files are skipped so a long run can be resumed or split.
 
-    python tools/build_patient_catalogue.py --limit 5        # pilot, then time it
-    python tools/build_patient_catalogue.py                  # the whole cohort
-    python tools/build_patient_catalogue.py --aggregate-only # rebuild the ranking
+MEMORY, AND WHY BATCHES
+-----------------------
+The generator retains annotation state across calls: a process starts at ~4.5 GB
+and grows ~660 MB per patient. Measured — 3 patients peaked at 4.5 GB, 25 at
+19.1 GB — after a first attempt at the whole cohort was killed at 34 patients on
+a 36 GB machine.
+
+`--loop` therefore runs the cohort in batches, each in a **fresh subprocess**, so
+the retained state dies with it and peak memory is bounded by one batch. Progress
+is per-patient files on disk, so a killed run resumes rather than restarting.
+
+    python tools/build_patient_catalogue.py --limit 5         # pilot, then time it
+    python tools/build_patient_catalogue.py --loop            # the whole cohort
+    python tools/build_patient_catalogue.py --aggregate-only  # rebuild the ranking
 """
 from __future__ import annotations
 
@@ -46,6 +57,25 @@ import pandas as pd
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src"))
+
+
+def resident_mb() -> float:
+    """Resident memory of this process, in MB.
+
+    Reported per batch because the generator reloads annotation state on every
+    call and does not release all of it: a single long-running process grows
+    until it is killed, which is what ended the first attempt at the full
+    cohort. Batching into fresh processes is the fix; this is how the fix is
+    verified rather than assumed.
+    """
+    try:
+        import resource
+        usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        # Linux reports kilobytes, macOS bytes.
+        return usage / (1024 * 1024) if sys.platform == "darwin" else usage / 1024
+    except Exception:                                           # noqa: BLE001
+        return float("nan")
+
 
 #: Columns of the existing ranking, reproduced so the two tables are comparable
 #: column for column. `frameshift` keeps upstream's name: it is what the old file
@@ -158,6 +188,23 @@ def main() -> None:
                              "pilot before committing to the full cohort")
     parser.add_argument("--release", type=int, default=115)
     parser.add_argument("--cache", default=os.environ.get("PYENSEMBL_CACHE_DIR"))
+    parser.add_argument("--loop", action="store_true",
+                        help="process the whole cohort in successive batches, "
+                             "each in a FRESH subprocess so memory is released "
+                             "between them. Without this the generator's "
+                             "accumulated annotation state grows until the "
+                             "process is killed.")
+    parser.add_argument("--batch-size", type=int, default=15,
+                        help="patients per batch when --loop is used. MEASURED: "
+                             "the process starts at ~4.5 GB (the annotation "
+                             "genome) and grows ~660 MB per patient that is "
+                             "never released — 3 patients peaked at 4.5 GB, 25 "
+                             "at 19.1 GB. A single process therefore dies part "
+                             "way through a large cohort; the first attempt here "
+                             "was killed at 34 patients on a 36 GB machine. "
+                             "15 keeps the peak near 14 GB. Raise it if you have "
+                             "headroom — fewer batches means less repeated "
+                             "startup — and lower it if the machine is busy.")
     parser.add_argument("--aggregate-only", action="store_true",
                         help="skip generation, rebuild the ranking from what is "
                              "already on disk")
@@ -165,6 +212,46 @@ def main() -> None:
 
     out_dir = (REPO / args.out_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.loop:
+        # Each batch is a separate interpreter. Anything the generator retains
+        # dies with it, so peak memory is bounded by one batch rather than by
+        # the whole cohort.
+        import subprocess
+        vcf_dir = (REPO / args.vcf_dir).resolve()
+        total = len(list(vcf_dir.glob("*.purple.sv.vcf.gz"))
+                    + list(vcf_dir.glob("*.purple.sv.vcf")))
+        batch = 0
+        while True:
+            done = len(list(out_dir.glob("*.peptides.tsv")))
+            if done >= total:
+                print(f"all {total:,} patients present")
+                break
+            batch += 1
+            print(f"\n===== batch {batch}: {done:,}/{total:,} done, "
+                  f"{args.batch_size} more =====", flush=True)
+            result = subprocess.run(
+                [sys.executable, "-u", __file__,
+                 "--vcf-dir", args.vcf_dir, "--out-dir", args.out_dir,
+                 "--limit", str(args.batch_size), "--release", str(args.release)]
+                + (["--cache", args.cache] if args.cache else []),
+                capture_output=True, text=True)
+            for line in result.stdout.splitlines():
+                if line.strip().startswith(("[", "peak", "ranking", "no ")):
+                    print("  " + line.strip(), flush=True)
+            if result.returncode != 0:
+                print(f"  batch failed (exit {result.returncode}):")
+                print("  " + (result.stderr or "").strip()[-600:])
+                break
+            after = len(list(out_dir.glob("*.peptides.tsv")))
+            if after == done:
+                print("  batch made no progress; stopping to avoid a loop")
+                break
+        ranking = aggregate(out_dir)
+        path = out_dir / "neoantigen_ranking_patch002.tsv"
+        ranking.to_csv(path, sep="\t", index=False)
+        print(f"\nranking: {len(ranking):,} unique peptides -> {path.name}")
+        return
 
     if not args.aggregate_only:
         vcf_dir = (REPO / args.vcf_dir).resolve()
@@ -199,6 +286,7 @@ def main() -> None:
 
         print(f"\n{len(pending)} processed, {failed} failed, "
               f"{peptides_total:,} peptide rows written")
+        print(f"peak resident memory: {resident_mb():.0f} MB")
         if failed:
             print(f"tracebacks in {out_dir / '_failures'}")
 
