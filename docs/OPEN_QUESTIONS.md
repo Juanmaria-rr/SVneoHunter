@@ -2,8 +2,33 @@
 
 ## 1. Minus-strand transcripts get the wrong 5' CDS, in every region
 
-**RESOLVED — root cause identified 2026-09-07. The fix is not yet applied, and
-every result in this repository was produced with the bug present.**
+**RESOLVED and FIXED.** Root cause identified 2026-09-07; patch 002 applied
+2026-09-08 and its effect measured by re-running the whole analysis into
+`results_patch002/` rather than overwriting `results/`.
+
+**Measured effect of the fix** (`results_patch002/COMPARISON.md`):
+
+| | before | after |
+|---|---|---|
+| `Start-loss`, minus strand | 84.0% | **10.1%** |
+| `Start-loss`, plus strand | 13.8% | 13.4% |
+| RPE1-WT candidates on minus | 41.5% (p = 5x10⁻⁴) | **46.8% (p = 0.36)** |
+| Matched candidates on minus | 74.4% (p = 7x10⁻⁴) | **60.9% (p = 0.30)** |
+| RPE1-WT distinct matches | 288 | **130** |
+| RPE1-TP53-BRCA1 events | 1 (SLC9A9) | **0** |
+| Candidates satisfying every criterion | 0 | 0 |
+
+The skew resolves in everything this pipeline generates, and only on the strand
+the defect touched. **No new match appeared anywhere** — 130 of 288 survive, 158
+vanish, 0 are new — so the defect was manufacturing matches rather than hiding
+them.
+
+The only set still deviating is the **reference catalogue** (60.9%, p = 2x10⁻⁶),
+which is the patient side and cannot be corrected from here. Related: matched
+peptides still almost never span their junction (1 of 161, against 18.2% across
+the candidate universe), a ~30-fold depletion the patch does **not** explain.
+Both point the same way — the catalogue was built with the same tool family and
+probably carries the artefact still. See question 2.
 
 Reproduce with `python tools/diagnose_minus_strand_cds.py` (exits 1 while the
 behaviour is present).

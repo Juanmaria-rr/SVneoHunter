@@ -7,6 +7,74 @@ what was tried, why, and what it showed.
 
 ---
 
+## 2026-09-08 — phase 2: the patched run, measured against the old one
+
+### Logic followed
+
+The whole analysis was re-run with patch 002 into `results_patch002/`, leaving
+`results/` untouched. Replacing it would have answered the wrong question: the
+useful quantity is not "what do we get now" but "how much was the defect
+distorting", and that is the evidence an upstream report needs.
+
+`tools/compare_runs.py` reports the difference on the quantities the defect was
+expected to move. A figure that does NOT move is as informative as one that does.
+
+### Results
+
+**The defect's signature is gone, and only on the strand it affected.**
+`Start-loss` falls from 84.0% to 10.1% on minus-strand fusions while the plus
+strand moves 13.8% to 13.4%. A fix that repaired both equally would have meant
+the diagnosis was wrong.
+
+**The strand skew resolves in everything the pipeline generates.** RPE1-WT
+candidates: 41.5% minus (p = 5e-4) to 46.8% (p = 0.36), against a 48.6%
+background. Matched candidates: 74.4% (p = 7e-4) to 60.9% (p = 0.30). The only
+set still deviating is the reference catalogue itself — the patient side, which
+cannot be corrected from here.
+
+**Roughly half the catalogue matches were artefactual, and none were being
+missed.** RPE1-WT: 288 distinct matches to 130. RPE1-TP53-BRCA1: 21 to **zero**.
+Of the 288, 130 survive, 158 vanish, and **0 are new**. The defect was
+manufacturing matches, not hiding them.
+
+**The headline conclusion is unchanged.** No candidate satisfies every criterion,
+in any line, on either branch — 0 before, 0 after.
+
+**SLC9A9 no longer exists.** RPE1-TP53-BRCA1's only event, featured in the
+executive summary and in reporting to collaborators as a line-specific deletion
+that was nonetheless a common polymorphism, was an artefact of the defect.
+
+### What did not resolve
+
+Matched peptides still almost never span their junction: 1 of 161 (0.6%) against
+18.2% across the candidate universe, where before it was 1 of 387 (0.3%) against
+16.5%. The ~30-fold depletion survives the patch and is therefore **not**
+explained by this defect.
+
+Most likely the reference catalogue carries the artefact still, being built with
+the same tool family, so our surviving matches are the ones resembling its
+non-spanning peptides. Settling it requires regenerating the catalogue with the
+patched tool, which is outside this repository. Recorded as an open question.
+
+### Changes made
+
+- `results_patch002/` with `PROVENANCE.md` (revision, diagnostic state, what to
+  expect) and `COMPARISON.md` / `.html`.
+- `tools/compare_runs.py`.
+- `.gitignore` excluded `results/` exactly, so a sibling output directory would
+  have been committed — both carry access-controlled, patient-derived data.
+  Now `results_*/` too, verified with `git check-ignore`.
+- `docs/OPEN_QUESTIONS.md` question 1 marked RESOLVED and FIXED, with the
+  measured effect.
+
+### Consequence to decide
+
+Everything published so far — the executive summary in three versions, the master
+tables, the per-line reports, and what was sent to collaborators — describes
+`results/`. Those figures are now known to include artefactual matches. Whether
+to republish from `results_patch002/`, or to publish the comparison as the
+result, is a decision about the record rather than a technical one.
+
 ## 2026-09-08 — patch 002: coding exons now reach consumers in reading order
 
 ### Logic followed
