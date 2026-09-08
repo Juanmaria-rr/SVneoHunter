@@ -23,6 +23,13 @@ the defect touched. **No new match appeared anywhere** — 130 of 288 survive, 1
 vanish, 0 are new — so the defect was manufacturing matches rather than hiding
 them.
 
+Stratifying the losses by the strand pair of each fusion tests that reading
+([`STRAND_COMPARISON.md`](STRAND_COMPARISON.md)): **every plus/plus fusion
+survived, 34 of 34**, while both mixed classes were removed entirely and the
+minus/minus class retained 39%. The plus/plus class is the internal control, and
+a genuine loss of sensitivity would not respect strand configuration that
+precisely.
+
 The only set still deviating is the **reference catalogue** (60.9%, p = 2x10⁻⁶),
 which is the patient side and cannot be corrected from here. Related: matched
 peptides still almost never span their junction (1 of 161, against 18.2% across

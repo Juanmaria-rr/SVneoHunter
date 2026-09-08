@@ -78,7 +78,7 @@ config/               template.yaml + a complete worked example
 tools/                reporting and verification scripts (see Reviewing a run)
 tests/                unit tests + an integration test on a synthetic fixture
 docs/                 EXECUTIVE_SUMMARY.md, LOCUS_VS_PEPTIDE.md,
-                      PROVENANCE.md, OPEN_QUESTIONS.md
+                      STRAND_COMPARISON.md, PROVENANCE.md, OPEN_QUESTIONS.md
 notebooks/            an independent PySpark re-derivation of every stage
 results/              run outputs (git-ignored; regenerated, not tracked)
 results_patch002/     the same analysis with the minus-strand fix applied, kept
@@ -607,6 +607,7 @@ peptide catalogue and a set of samples, and follow [Quick start](#quick-start).
 | `tools/check_strand_bias.py` | strand composition against a length-weighted background (see open questions) |
 | `tools/inspect_insertion.py` | the individual reads behind an insertion call, with mapping quality, duplicate flag and in-read offset, against a background rate — is this support real or a duplicate stack? |
 | `tools/compare_generators.py` | do two peptide generators produce interchangeable output? Run before swapping one. |
+| `tools/strand_stratified_comparison.py` | tests *why* patch 002 removed catalogue matches instead of adding them, by stratifying the losses on the strand pair of each fusion. The plus/plus class is the internal control: if a shared methodological artefact explains the losses, that class must be untouched |
 | `tools/compare_runs.py` | what changed between two output directories, on the quantities a generator defect was expected to move. Written so a correction can be *measured* rather than silently applied — replacing the old results answers the wrong question |
 | `tools/diagnose_minus_strand_cds.py` | sweeps a breakpoint through every region of a transcript and checks the 5' coding segment returned. Exits 1 if patch 002 is missing or reverted |
 | `notebooks/pipeline_walkthrough_pyspark.ipynb` | every stage re-derived independently in PySpark and asserted against the pipeline. Change `SAMPLE` in the first cell to walk through any line. |
