@@ -631,7 +631,7 @@ guards a rule whose violation produces a plausible but wrong result.
 
 The vendored dependency, NeoSV, is also MIT (Copyright (c) 2022 Yang Shi); its
 licence ships as [`vendor/LICENSE.NeoSV`](vendor/LICENSE.NeoSV) and applies to
-`vendor/neosv/`. Modifications to it are limited to one documented patch under
+`vendor/neosv/`. Modifications to it are limited to two documented patches under
 [`vendor/patches/`](vendor/patches/).
 
 The reading-frame bug that patch fixes was identified in
