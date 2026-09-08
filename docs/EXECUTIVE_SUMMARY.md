@@ -865,8 +865,9 @@ and `n_peptides_matched` columns of `master_sv.tsv`.
 - **Whether a negative RNA result means the lesion is absent.** It does not. <!-- focused:drop -->The
   gene may not be expressed in that sample, and nonsense-mediated decay of an
   aberrant transcript is a real possibility.<!-- /focused:drop -->
-- **Anything strand-controlled.** A defect in the vendored generator empties the
-  5′ coding segment of minus-strand transcripts when the breakpoint is intronic
+- **Anything strand-controlled.** A defect in the vendored generator returns the
+  wrong 5′ coding segment for minus-strand transcripts in every region tested —
+  empty for intronic breakpoints, the wrong length for exonic ones
   ([`OPEN_QUESTIONS.md`](OPEN_QUESTIONS.md)). <!-- focused:drop -->It is why 84.0% of minus-strand
   fusions are flagged `Start-loss` against 13.8% of plus-strand ones, why the
   junction sits at residue ~0, and why 1 of 408 matching peptides spans its

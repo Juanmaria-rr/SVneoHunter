@@ -528,11 +528,14 @@ Full derivation, including which observation set each threshold, is in
   clonal samples.
 - **No liftover is performed.** The reference catalogue and every sample VCF must
   be on the same genome build and annotation release.
-- **A known defect in the vendored generator, not yet fixed.** For a
-  minus-strand transcript whose breakpoint falls in an **intron** — most real
-  breakpoints — the 5' coding segment is returned empty. The fusion becomes the
-  3' partner alone, is flagged `Start-loss`, places the junction at residue ~0,
-  and can never yield a junction-spanning peptide. Measured here: 84.0% of
+- **A known defect in the vendored generator, not yet fixed.** On **minus-strand
+  transcripts the 5' coding segment is wrong in every region** — 0 of 188 tested
+  regions correct, against 87 of 87 on the plus strand. An intronic breakpoint
+  returns an empty head, so the fusion becomes the 3' partner alone, is flagged
+  `Start-loss`, places the junction at residue ~0 and can never yield a
+  junction-spanning peptide. An exonic breakpoint returns the wrong length, and
+  near the end of a transcript returns **too much** — adding sequence the gene
+  does not contribute, which the sliding window turns into peptides. Measured here: 84.0% of
   minus-strand fusions are `Start-loss` against 13.8% of plus-strand ones, and 1
   of 408 catalogue-matching peptides spans its junction where 67 would be
   expected. **Every figure in this repository was produced with this defect

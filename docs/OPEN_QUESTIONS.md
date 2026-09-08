@@ -1,6 +1,6 @@
 # Open questions
 
-## 1. Minus-strand transcripts lose their 5' CDS on an intronic breakpoint
+## 1. Minus-strand transcripts get the wrong 5' CDS, in every region
 
 **RESOLVED — root cause identified 2026-09-07. The fix is not yet applied, and
 every result in this repository was produced with the bug present.**
@@ -10,18 +10,40 @@ behaviour is present).
 
 ### The defect
 
-`neosv.fusion_utils.truncate_cds(transcript, '5', pos)` returns the coding
-sequence 5' of a breakpoint. For a **minus-strand transcript with an intronic
-breakpoint** it returns an empty sequence, `cut_length == 0`:
+`truncate_cds(transcript, '5', pos)` returns what a transcript contributes as the
+**head** of a fusion protein: its coding sequence from the start codon to the
+breakpoint. On minus-strand transcripts it returns the wrong length **in every
+region tested** — not only in introns, as first recorded here.
 
-| Breakpoint falls in | Plus strand | Minus strand |
+Swept across every 5'UTR, coding exon, intron and 3'UTR of nine transcripts:
+
+| | regions | correct |
 |---|---|---|
-| a coding exon | correct | correct |
-| an intron | correct (1,006 / 253 / 1,746 nt) | **empty, 6 of 6 genes tested** |
+| EGFR, PTEN, PIK3CA (plus) | 87 | **87** |
+| ITGA11, TP53, BRCA1, GOLGA3, KRAS, BRAF (minus) | 188 | **0** |
 
-Tested on ITGA11, TP53, BRCA1, GOLGA3, KRAS, BRAF (minus) and EGFR, PTEN,
-PIK3CA (plus). Introns are far larger than exons, so most real SV breakpoints
-land in them.
+Two distinct failure modes on the minus strand:
+
+| Breakpoint in | Result |
+|---|---|
+| an **intron** | the head comes back **empty** — no start codon, flagged `Start-loss` |
+| a **coding exon** | the length is counted from the wrong end: too short near the start of the transcript, **too long** near its end |
+
+**The second mode is the dangerous one.** Sequence the gene does not contribute
+is added to the fusion, and the sliding window turns it into peptides. Measured
+on a worked example, a breakpoint inside the last coding exon returned 278 nt
+where 26 were correct — about 84 residues of protein the gene never contributed.
+The defect can **fabricate** candidates, not only lose them.
+
+Reproduce with `python tools/diagnose_minus_strand_cds.py`, which sweeps every
+region and exits 1 while the behaviour is present.
+
+**Correction to an earlier version of this entry.** It stated that the exonic
+branch was correct on both strands. That was verified by checking the returned
+sequence began with `ATG` — a check that passes at any non-zero length, because
+the sequence is always taken from position 0 of the coding sequence. Starting
+correctly is not measuring correctly, and the exonic branch is wrong on the minus
+strand too.
 
 ### The mechanism, in plain terms
 
@@ -79,8 +101,10 @@ collapses leftwards to cover exons B and C and both introns.
 ```
 
 Exon A itself falls just outside, by one base, since the gap starts at its end
-plus one. That changes nothing about the outcome — and a breakpoint inside A
-would take the exonic branch, which is correct on both strands.
+plus one. That changes nothing about the outcome. A breakpoint inside A takes the
+exonic branch instead — which is *also* wrong on the minus strand, in the other
+direction: it counts exons from the left of the list rather than from the start
+of reading, so it returns the head that would belong to the mirrored breakpoint.
 
 **The consequence.** A breakpoint at position 450 is tested against the gaps.
 The introns cannot match, being inverted, so it matches the first gap — the one
@@ -95,30 +119,44 @@ introns come back inverted.
 ### Why the plus strand escapes
 
 There, coordinate order and reading order are the same, and the plus branch
-reverses nothing. EGFR with an intronic breakpoint correctly resolves to gap
-index 2, keeping two exons.
+reverses nothing. Every region of every plus-strand transcript tested returns the
+correct length. That is also why the tool appears to work: half the genome is
+processed correctly, and the other half returns output that is not obviously
+absurd.
 
 ### Why it went unnoticed for so long
 
 - **It fails silently.** An inverted range raises nothing; it simply never
   matches.
-- **It only fails on introns.** A breakpoint inside a coding exon takes a
-  different branch that is correct on both strands, so a test built from exonic
-  breakpoints passes cleanly. The first probe written for this investigation did
-  exactly that and reported "correct" before being redone.
-- **Introns are most of a gene**, so in real data almost every breakpoint takes
-  the broken path.
+- **The obvious check passes.** The returned sequence always begins with `ATG`,
+  since it is taken from position 0 of the coding sequence, so any test that
+  looks at the start rather than the length reports success. Two probes written
+  during this investigation did exactly that before being redone.
+- **The intronic mode is silent and the exonic mode is plausible.** An empty head
+  still yields a fusion — just one made entirely of the partner's tail — and a
+  head of the wrong length still translates.
 - **The docstring asserts the invariant that is violated.** `get_cds_range` is
   documented as returning ranges "from 5' to 3'", which is true only on the plus
   strand and is never checked.
 
-### The likely fix
+### The fix, and its measured effect
 
 Sort the coding ranges into reading order — descending coordinate for
-minus-strand transcripts — before the gaps are built, restoring the invariant the
-docstring already claims. One line, but it must be verified against
-`tools/diagnose_minus_strand_cds.py` **and** against the exonic branch, which is
-correct today and must stay correct.
+minus-strand transcripts — before anything consumes them, restoring the invariant
+the docstring already claims. Both `get_cds_range` and `get_noncds_range` read
+the raw accessor, so both need it; `truncate_cds` is the only consumer, and its
+minus-strand branches are already written for reading order and become correct
+once they receive it.
+
+Tested in memory, without modifying the vendored source:
+
+| | regions correct |
+|---|---|
+| unpatched | 87 / 275 (32%) |
+| patched | **275 / 275 (100%)** |
+
+Plus-strand results are unchanged, which is the necessary condition: the fix must
+repair the minus strand without disturbing the half that works.
 
 ### What it explains
 
