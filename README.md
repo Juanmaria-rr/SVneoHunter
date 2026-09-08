@@ -73,7 +73,7 @@ src/svneo/            the pipeline; nothing here names a cohort or sample
     null_model.py     how many matches chance alone would produce
     run.py            the orchestrator; entry point
 
-vendor/neosv/         NeoSV (MIT), vendored; one documented patch
+vendor/neosv/         NeoSV (MIT), vendored; two documented patches
 config/               template.yaml + a complete worked example
 tools/                reporting and verification scripts (see Reviewing a run)
 tests/                unit tests + an integration test on a synthetic fixture
