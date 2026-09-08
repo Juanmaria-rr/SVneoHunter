@@ -12,13 +12,13 @@ repository runs end to end without an external checkout or network access.
 |---|---|
 | Licence | **MIT**, Copyright (c) 2022 Yang Shi — see [`LICENSE.NeoSV`](LICENSE.NeoSV) |
 | Source | `NeoSV-main/neosv`, line endings normalised to LF |
-| Local modifications | **one patch** — see [`patches/`](patches/) |
+| Local modifications | **two patches** — see [`patches/`](patches/) |
 
 MIT permits modification and redistribution provided the copyright notice is
 retained. `LICENSE.NeoSV` is included for that purpose and must accompany any
 distribution of this repository.
 
-## The one patch
+## The patches
 
 [`001-pyensembl-stop-codon-frame`](patches/001-pyensembl-stop-codon-frame.md) —
 three characters, and required for correctness. pyensembl changed its
@@ -75,6 +75,7 @@ catalogues built elsewhere, which is precisely what patch 001 demonstrates.
 | Patch | File | Effect on peptides | Upstream? |
 |---|---|---|---|
 | 001-pyensembl-stop-codon-frame | `fusion_class.py` | corrects them; unpatched output is spurious with pyensembl > 2.3.13 | not yet submitted |
+| 002-minus-strand-cds-order | `transcript_utils.py` | corrects them; unpatched, minus-strand transcripts return the wrong 5' CDS in every region — 0 of 188 correct | not yet submitted |
 
 ## Known upstream behaviour worked around in the backend
 

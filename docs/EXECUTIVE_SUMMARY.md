@@ -194,8 +194,11 @@ either transcript are subtracted**, so what remains is what the SV created.
 | **Why** | most junctions fall in intergenic space, in introns without changing the protein, or reproduce the wild-type sequence — none can produce a neoantigen by definition |
 | **Does not capture** | nothing about presentation; see below |
 
-**The vendored copy carries exactly one patch**, required for correctness rather
-than convenience. pyensembl changed its coding-sequence accessor at v2.3.13;
+**The vendored copy carries two patches**, both required for correctness rather
+than convenience. Patch 002 restores the reading order of coding exons, without
+which minus-strand transcripts return the wrong 5' coding segment in every region
+(0 of 188 correct, against 87 of 87 on the plus strand) — see
+[`OPEN_QUESTIONS.md`](OPEN_QUESTIONS.md). Patch 001 is a frame correction: pyensembl changed its coding-sequence accessor at v2.3.13;
 NeoSV's compensating `− 3` then shifts the 3′ side of a fusion one amino acid out
 of frame. Unpatched with pyensembl 2.10.1 the tool emits 170 peptides where the
 patched version emits 64, **with none in common** — the frame-shifted sequences

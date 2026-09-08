@@ -7,6 +7,88 @@ what was tried, why, and what it showed.
 
 ---
 
+## 2026-09-08 — patch 002: coding exons now reach consumers in reading order
+
+### Logic followed
+
+Phase 1 of the plan agreed after the root cause was found. Two things had to
+happen before writing any code: correcting the record, and building a check that
+could actually detect the defect.
+
+**The recorded scope was wrong.** The previous entry said the exonic branch was
+correct on both strands. It is not. That claim came from checking the returned
+sequence began with `ATG` — a test that passes at any non-zero length, since the
+sequence is always taken from position 0 of the coding sequence. Starting
+correctly is not measuring correctly, and no probe had ever compared lengths.
+
+### Changes made
+
+**`tools/diagnose_minus_strand_cds.py` rewritten** to sweep a breakpoint through
+every region of a transcript — each coding exon, each intron — and compare the
+length returned against `expected_head()`, written from the biology rather than
+from the implementation. Before the patch:
+
+| | regions | correct |
+|---|---|---|
+| EGFR, PTEN, PIK3CA (plus) | 87 | 87 |
+| ITGA11, TP53, BRCA1, GOLGA3, KRAS, BRAF (minus) | 188 | **0** |
+
+Not a single minus-strand region was right. Two failure modes: an intronic
+breakpoint returned an empty head, an exonic one the wrong length — too short
+near the start of a transcript, **too long** near its end. The second direction
+is the damaging one, since it adds sequence the gene does not contribute and the
+sliding window turns it into peptides.
+
+**`vendor/patches/002-minus-strand-cds-order`** — `get_cds_range` now sorts into
+reading order (descending coordinate on the minus strand) and `get_noncds_range`
+consumes it instead of reading the raw accessor. Both edits carry a `PATCHED`
+comment naming the patch, following the convention of 001.
+
+Deliberately not patched: `truncate_cds`. Its minus-strand branches are already
+written for reading order and become correct once they receive it. Fixing them
+individually would add a second exception on top of the first and leave the
+documented invariant still false.
+
+**`tests/test_svneo.py::test_minus_strand_cds_is_read_in_transcript_order`** —
+asserts the source rather than the behaviour, so it runs without an annotation
+cache. Verified in both directions: passes patched, fails on a reverted file.
+Its accessor count strips comments, since the patch comments name the accessor
+they replaced and counting those would make the assertion depend on prose.
+
+### Results
+
+| | regions correct |
+|---|---|
+| before | 87 / 275 (32%) |
+| after | **275 / 275 (100%)** |
+
+**Zero regression on the plus strand**: 90 probe positions compared between the
+original and patched module, none changed. 189 of 194 minus-strand positions
+changed; the five that did not are positions where the wrong answer happened to
+coincide with the right one.
+
+Documentation corrected throughout — `OPEN_QUESTIONS.md`, `README.md`,
+`EXECUTIVE_SUMMARY.md` and `VENDOR.md` all described a single patch and an
+intron-only defect.
+
+### Not done
+
+**Phase 2: re-running.** `results/` still holds figures produced with the defect
+present, and `RPE1-WT_noPON` is from 2026-09-07 while the other seven runs are
+from 2026-08-14 — a mixed state either way. The agreed approach is to run the
+patched pipeline into a separate directory and compare, so the defect's impact
+is measured rather than silently corrected.
+
+What the comparison should answer: how the `frame_effect` distribution moves
+(84.0% `Start-loss` on the minus strand today), whether junction-spanning
+peptides recover (1 of 408 today, 67 expected), whether the strand skew
+disappears — which would confirm the diagnosis — and whether any candidate now
+survives every criterion.
+
+Anticipate that apparent overlap with the catalogue may *fall*: it was built with
+the same tool family and probably carries the same artefact, so correcting one
+side removes a shared signature. That would be informative, not a regression.
+
 ## 2026-09-07 — the strand skew is a bug in the vendored generator
 
 ### Logic followed

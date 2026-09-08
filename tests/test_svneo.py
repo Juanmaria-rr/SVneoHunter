@@ -324,6 +324,41 @@ def test_pon_still_votes_on_privacy_unless_told_otherwise():
         "reader cannot tell which basis produced is_private"
 
 
+def test_minus_strand_cds_is_read_in_transcript_order():
+    """Patch 002. Coding exon ranges arrive ordered by COORDINATE, which is
+    reading order on the plus strand and its reverse on the minus strand. Every
+    consumer assumes reading order — `get_cds_range` says so in its own
+    docstring — so on a minus-strand transcript the introns came out with
+    start > end (unmatchable) and exons were counted from the wrong end.
+
+    Effect before the patch: 0 of 188 minus-strand regions returned the correct
+    5' head, against 87 of 87 on the plus strand. An intronic breakpoint gave an
+    empty head; an exonic one gave the wrong length, and near the end of a
+    transcript gave TOO MUCH — adding sequence the gene does not contribute,
+    which the sliding window turns into peptides.
+
+    This asserts the source, not the behaviour, so it runs without an annotation
+    cache. `tools/diagnose_minus_strand_cds.py` checks the behaviour.
+    """
+    from svneo.generators.neosv import VENDOR_DIR
+    source = pathlib.Path(VENDOR_DIR) / "neosv" / "transcript_utils.py"
+    text = source.read_text()
+
+    assert "cds_ranges = sorted(transcript.coding_sequence_position_ranges)" in text, \
+        "get_cds_range no longer sorts: see vendor/patches/002-*.md"
+    assert "cds_ranges = cds_ranges[::-1]" in text, \
+        "the minus-strand reversal is gone: see vendor/patches/002-*.md"
+    # get_noncds_range must consume the ordered accessor, not the raw one, or
+    # it rebuilds the inverted intervals the patch exists to remove. Count in
+    # CODE only: the patch comments name the accessor they replaced, and
+    # counting those would make this assertion depend on prose.
+    code = "\n".join(line.split("#", 1)[0] for line in text.splitlines())
+    assert code.count("transcript.coding_sequence_position_ranges") == 1, \
+        "something reads the raw accessor again; route it through get_cds_range"
+    assert (pathlib.Path(VENDOR_DIR) / "patches" /
+            "002-minus-strand-cds-order.patch").exists()
+
+
 # ---------------------------------------------------------------------------
 # A freshly copied template must fail with something the user can act on
 #
